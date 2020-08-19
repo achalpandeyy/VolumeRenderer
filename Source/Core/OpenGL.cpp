@@ -1,12 +1,24 @@
 #include "OpenGL.h"
 
-PGLGENVERTEXARRAYS glGenVertexArrays = NULL;
-PGLBINDVERTEXARRAY glBindVertexArray = NULL;
-PGLGENBUFFERS glGenBuffers = NULL;
-PGLBINDBUFFER glBindBuffer = NULL;
-PGLBUFFERDATA glBufferData = NULL;
-PGLVERTEXATTRIBPOINTER glVertexAttribPointer = NULL;
-PGLENABLEVERTEXATTRIBARRAY glEnableVertexAttribArray = NULL;
+extern PGLGENVERTEXARRAYS glGenVertexArrays = NULL;
+extern PGLBINDVERTEXARRAY glBindVertexArray = NULL;
+extern PGLGENBUFFERS glGenBuffers = NULL;
+extern PGLBINDBUFFER glBindBuffer = NULL;
+extern PGLBUFFERDATA glBufferData = NULL;
+extern PGLVERTEXATTRIBPOINTER glVertexAttribPointer = NULL;
+extern PGLENABLEVERTEXATTRIBARRAY glEnableVertexAttribArray = NULL;
+extern PGLCREATESHADER glCreateShader = NULL;
+extern PGLSHADERSOURCE glShaderSource = NULL;
+extern PGLCOMPILESHADER glCompileShader = NULL;
+extern PGLGETSHADERIV glGetShaderiv = NULL;
+extern PGLGETSHADERINFOLOG glGetShaderInfoLog = NULL;
+extern PGLCREATEPROGRAM glCreateProgram = NULL;
+extern PGLATTACHSHADER glAttachShader = NULL;
+extern PGLLINKPROGRAM glLinkProgram = NULL;
+extern PGLGETPROGRAMIV glGetProgramiv = NULL;
+extern PGLGETPROGRAMINFOLOG glGetProgramInfoLog = NULL;
+extern PGLDELETESHADER glDeleteShader = NULL;
+extern PGLUSEPROGRAM glUseProgram = NULL;
 
 static PROC LoadProc(const char* name)
 {
@@ -65,6 +77,18 @@ extern HGLRC Win32InitOpenGL(HDC device_context)
     glBufferData = (PGLBUFFERDATA)LoadProc("glBufferData");
     glVertexAttribPointer = (PGLVERTEXATTRIBPOINTER)LoadProc("glVertexAttribPointer");
     glEnableVertexAttribArray = (PGLENABLEVERTEXATTRIBARRAY)LoadProc("glEnableVertexAttribArray");
+    glCreateShader = (PGLCREATESHADER)LoadProc("glCreateShader");
+    glShaderSource = (PGLSHADERSOURCE)LoadProc("glShaderSource");
+    glCompileShader = (PGLCOMPILESHADER)LoadProc("glCompileShader");
+    glGetShaderiv = (PGLGETSHADERIV)LoadProc("glGetShaderiv");
+    glGetShaderInfoLog = (PGLGETSHADERINFOLOG)LoadProc("glGetShaderInfoLog");
+    glCreateProgram = (PGLCREATEPROGRAM)LoadProc("glCreateProgram");
+    glAttachShader = (PGLATTACHSHADER)LoadProc("glAttachShader");
+    glLinkProgram = (PGLLINKPROGRAM)LoadProc("glLinkProgram");
+    glGetProgramiv = (PGLGETPROGRAMIV)LoadProc("glGetProgramiv");
+    glGetProgramInfoLog = (PGLGETPROGRAMINFOLOG)LoadProc("glGetProgramInfoLog");
+    glDeleteShader = (PGLDELETESHADER)LoadProc("glDeleteShader");
+    glUseProgram = (PGLUSEPROGRAM)LoadProc("glUseProgram");
 
     return opengl_context;
 }
