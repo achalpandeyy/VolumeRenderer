@@ -17,12 +17,19 @@
 // functions from opengl32.dll.
 #pragma comment(lib, "opengl32.lib")
 
+int width = 1280;
+int height = 720;
+
 f32 theta_x = 0.f;
 f32 theta_y = 0.f;
 f32 last_x;
 f32 last_y;
 
+int wheel = 0;
+f32 fov = PI_32 / 4.f;
+
 glm::mat4 model(1.f);
+glm::mat4 projection = glm::perspective(fov, (f32)width / (f32)height, 0.1f, 100.f);
 
 LRESULT CALLBACK Win32WindowCallback(HWND window, UINT message, WPARAM w_param, LPARAM l_param)
 {
@@ -38,9 +45,6 @@ LRESULT CALLBACK Win32WindowCallback(HWND window, UINT message, WPARAM w_param, 
             if (w_param & MK_LBUTTON)
             {
                 const POINTS mouse_pos = MAKEPOINTS(l_param);
-                std::ostringstream oss;
-                oss << "[" << mouse_pos.x << ", " << mouse_pos.y << "]";
-                SetWindowTextA(window, oss.str().c_str());
 
                 f32 dx = mouse_pos.x - last_x;
                 f32 dy = mouse_pos.y - last_y;
@@ -77,7 +81,18 @@ LRESULT CALLBACK Win32WindowCallback(HWND window, UINT message, WPARAM w_param, 
 
         case WM_MOUSEWHEEL:
         {
-            // Implement zoom with mouse wheel.
+            wheel += GET_WHEEL_DELTA_WPARAM(w_param);
+
+            if (wheel >= WHEEL_DELTA || wheel <= -WHEEL_DELTA)
+            {
+                f32 strength = 0.05f;
+                fov -= strength * (wheel / WHEEL_DELTA);
+                fov = glm::clamp(fov, PI_32 / 180.f, PI_32 / 2.f);
+
+                wheel %= WHEEL_DELTA;
+            }
+
+            projection = glm::perspective(fov, (f32)width / (f32)height, 0.1f, 100.f);       
         } break;
     }
 
@@ -131,9 +146,6 @@ b32 Win32WindowShouldQuit()
 
 int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_line, INT show_code)
 {
-    int width = 1280;
-    int height = 720;
-
     HWND window = Win32CreateWindow(width, height, "Volume Renderer", instance);
     if (!window)
     {
@@ -246,8 +258,6 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
     glm::vec3 cam_up = glm::normalize(glm::vec3(0.f, -1.f, 0.f));
 
     glm::mat4 view = glm::lookAt(cam_pos, cam_pos + cam_front, cam_up);
-    glm::mat4 projection = glm::perspective(glm::radians(45.f), (f32)width / (f32)height, 0.1f, 100.f);
-    glm::mat4 pv = projection * view;
     
     GLuint vao;
     GLCall(glGenVertexArrays(1, &vao));
@@ -298,7 +308,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
         GLCall(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
 
         shader.Use();
-        glm::mat4 pvm = pv * model;
+        glm::mat4 pvm = projection * view * model;
         GLCall(GLint pvm_location = glGetUniformLocation(shader.id, "pvm"));
         GLCall(glUniformMatrix4fv(pvm_location, 1, GL_FALSE, glm::value_ptr(pvm)));
 
