@@ -19,6 +19,10 @@ extern PGLGETPROGRAMIV glGetProgramiv = NULL;
 extern PGLGETPROGRAMINFOLOG glGetProgramInfoLog = NULL;
 extern PGLDELETESHADER glDeleteShader = NULL;
 extern PGLUSEPROGRAM glUseProgram = NULL;
+extern PGLGETUNIFORMLOCATION glGetUniformLocation = NULL;
+extern PGLUNIFORMMATRIX4FV glUniformMatrix4fv = NULL;
+extern PGLUNIFORM1I glUniform1i = NULL;
+extern PGLACTIVETEXTURE glActiveTexture = NULL;
 
 static PROC LoadProc(const char* name)
 {
@@ -89,6 +93,10 @@ extern HGLRC Win32InitOpenGL(HDC device_context)
     glGetProgramInfoLog = (PGLGETPROGRAMINFOLOG)LoadProc("glGetProgramInfoLog");
     glDeleteShader = (PGLDELETESHADER)LoadProc("glDeleteShader");
     glUseProgram = (PGLUSEPROGRAM)LoadProc("glUseProgram");
+    glGetUniformLocation = (PGLGETUNIFORMLOCATION)LoadProc("glGetUniformLocation");
+    glUniformMatrix4fv = (PGLUNIFORMMATRIX4FV)LoadProc("glUniformMatrix4fv");
+    glUniform1i = (PGLUNIFORM1I)LoadProc("glUniform1i");
+    glActiveTexture = (PGLACTIVETEXTURE)LoadProc("glActiveTexture");
 
     return opengl_context;
 }

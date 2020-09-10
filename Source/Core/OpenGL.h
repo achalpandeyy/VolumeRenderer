@@ -15,11 +15,13 @@
 //
 
 #define GL_ARRAY_BUFFER                   0x8892
+#define GL_ELEMENT_ARRAY_BUFFER           0x8893
 #define GL_STATIC_DRAW                    0x88E4
 #define GL_VERTEX_SHADER                  0x8B31
 #define GL_FRAGMENT_SHADER                0x8B30
 #define GL_COMPILE_STATUS                 0x8B81
 #define GL_LINK_STATUS                    0x8B82
+#define GL_TEXTURE0                       0x84C0
 
 //
 // OpenGL types
@@ -72,6 +74,14 @@ typedef void (WINAPIP PGLDELETESHADER)(GLuint);
 extern PGLDELETESHADER glDeleteShader;
 typedef void (WINAPIP PGLUSEPROGRAM)(GLuint);
 extern PGLUSEPROGRAM glUseProgram;
+typedef GLint (WINAPIP PGLGETUNIFORMLOCATION)(GLuint, const GLchar*);
+extern PGLGETUNIFORMLOCATION glGetUniformLocation;
+typedef void (WINAPIP PGLUNIFORMMATRIX4FV)(GLint, GLsizei, GLboolean, const GLfloat*);
+extern PGLUNIFORMMATRIX4FV glUniformMatrix4fv;
+typedef void (WINAPIP PGLUNIFORM1I)(GLint, GLint);
+extern PGLUNIFORM1I glUniform1i;
+typedef void (WINAPIP PGLACTIVETEXTURE)(GLenum);
+extern PGLACTIVETEXTURE glActiveTexture;
 
 //
 // Initialize OpenGL
