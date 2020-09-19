@@ -1,14 +1,14 @@
-#version 460 core
+#version 330 core
 
-layout (location = 0) in vec3 vertex_pos;
-layout (location = 1) in vec2 vertex_tex_coords;
+layout (location = 0) in vec3 v_pos;
 
-out vec2 tex_coords;
+out vec3 view_ray_direction;
 
-uniform mat4 pvm;
+uniform mat4 pv;
+uniform vec3 cam_pos;
 
 void main()
 {
-    tex_coords = vertex_tex_coords;
-    gl_Position = pvm * vec4(vertex_pos, 1.0);
+    view_ray_direction = v_pos - cam_pos;
+    gl_Position = pv * vec4(v_pos, 1.f);
 }

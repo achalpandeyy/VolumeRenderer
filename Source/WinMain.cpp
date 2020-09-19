@@ -20,16 +20,81 @@
 int width = 1280;
 int height = 720;
 
-f32 theta_x = 0.f;
-f32 theta_y = 0.f;
-f32 last_x;
-f32 last_y;
+struct ArcballCamera
+{
+    ArcballCamera(const glm::vec3& center, const glm::vec3& pos, f32 sensitivity = 2.5f, f32 fov = PI_32 / 4.f)
+        : arcball_center(center), position(pos), sensitivity(sensitivity), fov(fov)
+    {
+        glm::vec3 cam_z = glm::normalize(position - center);
+        glm::vec3 cam_x = glm::normalize(glm::cross(cam_z, glm::vec3(0.f, 1.f, 0.f)));
+        glm::vec3 cam_y = glm::cross(cam_x, cam_z);
 
+        arcball_rotation = glm::mat4(glm::vec4(cam_x, 0.f), glm::vec4(cam_y, 0.f), glm::vec4(cam_z, 0.f), glm::vec4(0.f, 0.f, 0.f, 1.f));
+        view = GetArcballRotationToWorld();
+    }
+
+    void Rotate(const glm::vec3& prev, const glm::vec3& curr)
+    {
+        f32 angle = glm::acos(glm::min(1.f, glm::dot(prev, curr)));
+        glm::vec3 axis = glm::cross(prev, curr);
+
+        Update(angle, axis);
+    }
+
+    glm::vec3 position;
+    f32 sensitivity;
+    glm::mat4 view;
+    f32 fov;
+
+private:
+    void Update(f32 angle, const glm::vec3& axis)
+    {
+        arcball_rotation = glm::rotate(glm::mat4(1.f), sensitivity * angle, axis) * arcball_rotation;
+        view = GetArcballRotationToWorld();
+
+        glm::mat4 view_inverse = glm::inverse(view);
+
+        position = glm::vec3(view_inverse[3][0], view_inverse[3][1], view_inverse[3][2]);
+    }
+
+    inline glm::mat4 GetArcballRotationToWorld()
+    {
+        glm::mat4 center_translation = glm::translate(glm::mat4(1.f), -arcball_center);
+
+        f32 view_distance = glm::distance(arcball_center, position);
+        glm::mat4 position_translation = glm::translate(glm::mat4(1.f), glm::vec3(0.f, 0.f, -view_distance));
+
+        return position_translation * arcball_rotation * center_translation;
+    }
+
+    const glm::vec3 arcball_center;
+    glm::mat4 arcball_rotation;
+};
+
+// TODO: Make this a member of non-platform window class, so it can be retrived by the windows ptr
+// (data stored on windows side)
+ArcballCamera camera(glm::vec3(0.5f), glm::vec3(0.5f, 0.5f, 3.f));
+
+// TODO: This comes together to form a Win32Mouse
+int last_x = width / 2;
+int last_y = height / 2;
 int wheel = 0;
-f32 fov = PI_32 / 4.f;
 
-glm::mat4 model(1.f);
-glm::mat4 projection = glm::perspective(fov, (f32)width / (f32)height, 0.1f, 100.f);
+glm::vec3 ScreenToArcball(int x, int y)
+{
+    // Screen to NDC
+    glm::vec3 p = glm::vec3(2.f * ((f32)x / (f32)width) - 1.f, 1.f - 2.f * ((f32)y / (f32)height), 0.f);
+
+    f32 distance_sq = glm::dot(p, p);
+    if (distance_sq <= 1.f)
+    {
+        return glm::vec3(p[0], p[1], glm::sqrt(1.f - distance_sq));
+    }
+    else
+    {
+        return glm::normalize(p);
+    }
+}
 
 LRESULT CALLBACK Win32WindowCallback(HWND window, UINT message, WPARAM w_param, LPARAM l_param)
 {
@@ -46,18 +111,10 @@ LRESULT CALLBACK Win32WindowCallback(HWND window, UINT message, WPARAM w_param, 
             {
                 const POINTS mouse_pos = MAKEPOINTS(l_param);
 
-                f32 dx = mouse_pos.x - last_x;
-                f32 dy = mouse_pos.y - last_y;
+                glm::vec3 prev = ScreenToArcball(last_x, last_y);
+                glm::vec3 curr = ScreenToArcball(mouse_pos.x, mouse_pos.y);
 
-                theta_x -= 0.005f * dy;
-
-                theta_x = glm::clamp(theta_x, -PI_32 / 2.f, PI_32 / 2.f);
-
-                theta_y -= 0.005f * dx;
-                theta_y = std::fmod(theta_y, 2.f * PI_32);
-
-                model = glm::rotate(glm::mat4(1.f), theta_x, glm::vec3(1.f, 0.f, 0.f));
-                model = glm::rotate(model, theta_y, glm::vec3(0.f, 1.f, 0.f));
+                camera.Rotate(prev, curr);
 
                 last_x = mouse_pos.x;
                 last_y = mouse_pos.y;
@@ -85,14 +142,20 @@ LRESULT CALLBACK Win32WindowCallback(HWND window, UINT message, WPARAM w_param, 
 
             if (wheel >= WHEEL_DELTA || wheel <= -WHEEL_DELTA)
             {
+                // TODO: Put this in camera class.
                 f32 strength = 0.05f;
-                fov -= strength * (wheel / WHEEL_DELTA);
-                fov = glm::clamp(fov, PI_32 / 180.f, PI_32 / 2.f);
+                camera.fov -= strength * (wheel / WHEEL_DELTA);
+                camera.fov = glm::clamp(camera.fov, PI_32 / 180.f, PI_32 / 2.f);
 
                 wheel %= WHEEL_DELTA;
             }
 
-            projection = glm::perspective(fov, (f32)width / (f32)height, 0.1f, 100.f);       
+        } break;
+
+        case WM_KEYDOWN:
+        {
+            if (w_param == VK_ESCAPE)
+                PostQuitMessage(0);
         } break;
     }
 
@@ -157,107 +220,77 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
     HGLRC opengl_context = Win32InitOpenGL(device_context);
 
     GLCall(glEnable(GL_DEPTH_TEST));
+    GLCall(glViewport(0, 0, width, height));
 
     GLCall(LPCSTR version = (LPCSTR)glGetString(GL_VERSION));
     SetWindowTextA(window, version);
 
-#if 0
-    char* volume_data = nullptr;
+    GLuint vol_texture;
+    GLCall(glGenTextures(1, &vol_texture));
+
+    GLCall(glBindTexture(GL_TEXTURE_3D, vol_texture));
+    GLCall(glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE));
+    GLCall(glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE));
+    GLCall(glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE));
+    GLCall(glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR));
+    GLCall(glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR));
 
     // Read in the .raw file
     std::ifstream file("../Resources/skull_256x256x256_uint8.raw", std::ios::in | std::ios::binary | std::ios::ate);
     if (file.is_open())
     {
-        std::streampos pos = file.tellg(); // position of the last character == size of the file
-        volume_data = new char[pos];
+        std::streampos pos = file.tellg();
+        char* volume_data = new char[pos]; // position of the last character == size of the file
         file.seekg(0, std::ios::beg);
         file.read(volume_data, pos);
         file.close();
 
-        // Write slices for debugging.
-        for (size_t slice_idx = 0; slice_idx < 256; ++slice_idx)
-        {
-            std::ostringstream oss;
-            oss << "slices/slice" << slice_idx << ".ppm";
-
-            std::ofstream imageFile(oss.str().c_str());
-            imageFile << "P3\n" << 256 << ' ' << 256 << "\n255\n";
-
-            for (size_t y = 0; y < 256; ++y)
-            {
-                for (size_t x = 0; x < 256; ++x)
-                {
-                    size_t idx = (slice_idx * 256 * 256) + (y * 256) + x;
-                    unsigned int r = static_cast<unsigned int>(volume_data[idx]);
-                    unsigned int g = static_cast<unsigned int>(volume_data[idx]);
-                    unsigned int b = static_cast<unsigned int>(volume_data[idx]);
-                    imageFile << r << ' ' << g << ' ' << b << '\n';
-                }
-            }
-
-            imageFile.close();
-        }
-
         // Upload it to the GPU.
+        GLCall(glTexImage3D(GL_TEXTURE_3D, 0, GL_RED, 256, 256, 256, 0, GL_RED, GL_UNSIGNED_BYTE, volume_data));
     }
     else
     {
         OutputDebugStringA("Unable to open file!\n");
+        exit(1);
     }
-#endif
+
+    GLCall(glBindTexture(GL_TEXTURE_3D, 0));
 
     f32 vertices[] =
     {
-        -0.5f, -0.5f, -0.5f,  0.0f, 0.0f, 
-         0.5f, -0.5f, -0.5f,  1.0f, 0.0f,
-         0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-         0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-        -0.5f,  0.5f, -0.5f,  0.0f, 1.0f,
-        -0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
+        0.f, 0.f, 0.f,
+        1.f, 0.f, 0.f,
+        1.f, 1.f, 0.f,
+        0.f, 1.f, 0.f,
 
-        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-         0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
-         0.5f,  0.5f,  0.5f,  1.0f, 1.0f,
-         0.5f,  0.5f,  0.5f,  1.0f, 1.0f,
-        -0.5f,  0.5f,  0.5f,  0.0f, 1.0f,
-        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
+        0.f, 0.f, 1.f,
+        1.f, 0.f, 1.f,
+        1.f, 1.f, 1.f,
+        0.f, 1.f, 1.f
+    };
 
-        -0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-        -0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-        -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-        -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-        -0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+    u32 indices[] =
+    {
+        0, 2, 1,
+        0, 3, 2,
 
-         0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-         0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-         0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-         0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-         0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-         0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
+        6, 2, 3,
+        6, 3, 7,
 
-        -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-         0.5f, -0.5f, -0.5f,  1.0f, 1.0f,
-         0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
-         0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
-        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-        -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
+        1, 2, 6,
+        1, 6, 5,
 
-        -0.5f,  0.5f, -0.5f,  0.0f, 1.0f,
-         0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-         0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-         0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-        -0.5f,  0.5f,  0.5f,  0.0f, 0.0f,
-        -0.5f,  0.5f, -0.5f,  0.0f, 1.0f
+        7, 3, 0,
+        7, 0, 4,
+
+        0, 1, 5,
+        0, 5, 4,
+
+        6, 7, 4,
+        6, 4, 5
     };
 
     Shader shader("../Source/Shaders/Shader.vs", "../Source/Shaders/Shader.fs");
-
-    const glm::vec3 cam_pos(0.f, 0.f, 3.f);
-    const glm::vec3 cam_front(0.f, 0.f, -1.f);
-    glm::vec3 cam_up = glm::normalize(glm::vec3(0.f, -1.f, 0.f));
-
-    glm::mat4 view = glm::lookAt(cam_pos, cam_pos + cam_front, cam_up);
     
     GLuint vao;
     GLCall(glGenVertexArrays(1, &vao));
@@ -268,39 +301,27 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
     GLCall(glBindBuffer(GL_ARRAY_BUFFER, vbo));
     GLCall(glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW));
 
-    GLsizei stride = 5 * sizeof(f32);
+    GLsizei stride = 3 * sizeof(f32);
 
     GLCall(glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (const void*)0));
     GLCall(glEnableVertexAttribArray(0));
 
-    GLCall(glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (const void*)(3 * sizeof(f32))));
-    GLCall(glEnableVertexAttribArray(1));
+    GLCall(glBindVertexArray(0));
 
-    // load the image data
-    int tex_width, tex_height, tex_channel_count;
-    u8* tex_data = stbi_load("../Resources/plank.jpg", &tex_width, &tex_height, &tex_channel_count, 0);
-    if (!tex_data)
-    {
-        OutputDebugStringA("Unable to load texture!\n");
-        exit(1);
-    }
-
-    GLuint texture;
-    GLCall(glGenTextures(1, &texture));
-
-    GLCall(glBindTexture(GL_TEXTURE_2D, texture));
-
-    GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT));
-    GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT));
-    GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR));
-    GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR));
-
-    GLCall(glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, tex_width, tex_height, 0, GL_RGB, GL_UNSIGNED_BYTE, tex_data));
-
-    GLCall(glBindTexture(GL_TEXTURE_2D, 0));
+    GLuint ibo;
+    GLCall(glGenBuffers(1, &ibo));
+    GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo));
+    GLCall(glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW));
 
     shader.Use();
-    GLCall(glUniform1i(glGetUniformLocation(shader.id, "texture_sampler"), 0));
+
+    // volume_dims
+    GLCall(GLint location = glGetUniformLocation(shader.id, "volume_dims"));
+    GLCall(glUniform3i(location, 256, 256, 256));
+
+    // volume
+    GLCall(location = glGetUniformLocation(shader.id, "volume"));
+    GLCall(glUniform1i(location, 0));
 
     while (!Win32WindowShouldQuit())
     {
@@ -308,13 +329,19 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
         GLCall(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
 
         shader.Use();
-        glm::mat4 pvm = projection * view * model;
-        GLCall(GLint pvm_location = glGetUniformLocation(shader.id, "pvm"));
-        GLCall(glUniformMatrix4fv(pvm_location, 1, GL_FALSE, glm::value_ptr(pvm)));
+        GLCall(location = glGetUniformLocation(shader.id, "cam_pos"));
+        GLCall(glUniform3f(location, camera.position.x, camera.position.y, camera.position.z));
+
+        glm::mat4 projection = glm::perspective(camera.fov, (f32)width / (f32)height, 0.1f, 100.f);       
+
+        glm::mat4 pv = projection * camera.view;
+        GLCall(GLint pv_location = glGetUniformLocation(shader.id, "pv"));
+        GLCall(glUniformMatrix4fv(pv_location, 1, GL_FALSE, glm::value_ptr(pv)));
 
         GLCall(glBindVertexArray(vao));
-        GLCall(glBindTexture(GL_TEXTURE_2D, texture));
-        GLCall(glDrawArrays(GL_TRIANGLES, 0, 36));
+        GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo));
+        GLCall(glBindTexture(GL_TEXTURE_3D, vol_texture));
+        GLCall(glDrawElements(GL_TRIANGLES, 6 * 2 * 3, GL_UNSIGNED_INT, 0));
 
         SwapBuffers(device_context);
     }

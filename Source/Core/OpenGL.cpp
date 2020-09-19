@@ -23,6 +23,9 @@ extern PGLGETUNIFORMLOCATION glGetUniformLocation = NULL;
 extern PGLUNIFORMMATRIX4FV glUniformMatrix4fv = NULL;
 extern PGLUNIFORM1I glUniform1i = NULL;
 extern PGLACTIVETEXTURE glActiveTexture = NULL;
+extern PGLTEXIMAGE3D glTexImage3D = NULL;
+extern PGLUNIFORM3I glUniform3i = NULL;
+extern PGLUNIFORM3F glUniform3f = NULL;
 
 static PROC LoadProc(const char* name)
 {
@@ -97,6 +100,9 @@ extern HGLRC Win32InitOpenGL(HDC device_context)
     glUniformMatrix4fv = (PGLUNIFORMMATRIX4FV)LoadProc("glUniformMatrix4fv");
     glUniform1i = (PGLUNIFORM1I)LoadProc("glUniform1i");
     glActiveTexture = (PGLACTIVETEXTURE)LoadProc("glActiveTexture");
+    glTexImage3D = (PGLTEXIMAGE3D)LoadProc("glTexImage3D");
+    glUniform3i = (PGLUNIFORM3I)LoadProc("glUniform3i");
+    glUniform3f = (PGLUNIFORM3F)LoadProc("glUniform3f");
 
     return opengl_context;
 }

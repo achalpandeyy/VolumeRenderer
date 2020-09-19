@@ -22,6 +22,9 @@
 #define GL_COMPILE_STATUS                 0x8B81
 #define GL_LINK_STATUS                    0x8B82
 #define GL_TEXTURE0                       0x84C0
+#define GL_TEXTURE_3D                     0x806F
+#define GL_TEXTURE_WRAP_R                 0x8072
+#define GL_CLAMP_TO_EDGE                  0x812F
 
 //
 // OpenGL types
@@ -82,6 +85,12 @@ typedef void (WINAPIP PGLUNIFORM1I)(GLint, GLint);
 extern PGLUNIFORM1I glUniform1i;
 typedef void (WINAPIP PGLACTIVETEXTURE)(GLenum);
 extern PGLACTIVETEXTURE glActiveTexture;
+typedef void (WINAPIP PGLTEXIMAGE3D)(GLenum, GLint, GLint, GLsizei, GLsizei, GLsizei, GLint, GLenum, GLenum, const void*);
+extern PGLTEXIMAGE3D glTexImage3D;
+typedef void (WINAPIP PGLUNIFORM3I)(GLint location, GLint v0, GLint v1, GLint v2);
+extern PGLUNIFORM3I glUniform3i;
+typedef void (WINAPIP PGLUNIFORM3F)(GLint location, GLfloat v0, GLfloat v1, GLfloat v2);
+extern PGLUNIFORM3F glUniform3f;
 
 //
 // Initialize OpenGL
