@@ -27,7 +27,7 @@ void main()
     for (float t = t_hit.x; t < t_hit.y; t += dt)
     {
         float val = texture(volume, p).r;
-        vec4 val_color = vec4(val); // I don't have transfer functions currently
+        vec4 val_color = vec4(val);
 
         color.rgb += (1.f - color.a) * val_color.a * val_color.rgb;
         color.a += (1.f - color.a) * val_color.a;

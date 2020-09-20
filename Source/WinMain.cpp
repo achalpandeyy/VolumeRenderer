@@ -1,17 +1,14 @@
 #include "Core/Win32.h"
 #include "Core/Types.h"
 #include "Core/OpenGL.h"
+#include "ArcballCamera.h"
 #include "Shader.h"
 
 #include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include <stb_image/stb_image.h>
 #include <algorithm>
 #include <fstream>
 #include <sstream>
-
-#define PI_32 3.141592f
 
 // NOTE(achal): Linking with opengl32.dll makes sure that you don't have to GetProcAddress OpenGL 1.1 or below
 // functions from opengl32.dll.
@@ -20,62 +17,11 @@
 int width = 1280;
 int height = 720;
 
-struct ArcballCamera
-{
-    ArcballCamera(const glm::vec3& center, const glm::vec3& pos, f32 sensitivity = 2.5f, f32 fov = PI_32 / 4.f)
-        : arcball_center(center), position(pos), sensitivity(sensitivity), fov(fov)
-    {
-        glm::vec3 cam_z = glm::normalize(position - center);
-        glm::vec3 cam_x = glm::normalize(glm::cross(cam_z, glm::vec3(0.f, 1.f, 0.f)));
-        glm::vec3 cam_y = glm::cross(cam_x, cam_z);
-
-        arcball_rotation = glm::mat4(glm::vec4(cam_x, 0.f), glm::vec4(cam_y, 0.f), glm::vec4(cam_z, 0.f), glm::vec4(0.f, 0.f, 0.f, 1.f));
-        view = GetArcballRotationToWorld();
-    }
-
-    void Rotate(const glm::vec3& prev, const glm::vec3& curr)
-    {
-        f32 angle = glm::acos(glm::min(1.f, glm::dot(prev, curr)));
-        glm::vec3 axis = glm::cross(prev, curr);
-
-        Update(angle, axis);
-    }
-
-    glm::vec3 position;
-    f32 sensitivity;
-    glm::mat4 view;
-    f32 fov;
-
-private:
-    void Update(f32 angle, const glm::vec3& axis)
-    {
-        arcball_rotation = glm::rotate(glm::mat4(1.f), sensitivity * angle, axis) * arcball_rotation;
-        view = GetArcballRotationToWorld();
-
-        glm::mat4 view_inverse = glm::inverse(view);
-
-        position = glm::vec3(view_inverse[3][0], view_inverse[3][1], view_inverse[3][2]);
-    }
-
-    inline glm::mat4 GetArcballRotationToWorld()
-    {
-        glm::mat4 center_translation = glm::translate(glm::mat4(1.f), -arcball_center);
-
-        f32 view_distance = glm::distance(arcball_center, position);
-        glm::mat4 position_translation = glm::translate(glm::mat4(1.f), glm::vec3(0.f, 0.f, -view_distance));
-
-        return position_translation * arcball_rotation * center_translation;
-    }
-
-    const glm::vec3 arcball_center;
-    glm::mat4 arcball_rotation;
-};
-
 // TODO: Make this a member of non-platform window class, so it can be retrived by the windows ptr
 // (data stored on windows side)
 ArcballCamera camera(glm::vec3(0.5f), glm::vec3(0.5f, 0.5f, 3.f));
 
-// TODO: This comes together to form a Win32Mouse
+// TODO: This seem to come together to form a Win32Mouse
 int last_x = width / 2;
 int last_y = height / 2;
 int wheel = 0;
@@ -142,11 +88,7 @@ LRESULT CALLBACK Win32WindowCallback(HWND window, UINT message, WPARAM w_param, 
 
             if (wheel >= WHEEL_DELTA || wheel <= -WHEEL_DELTA)
             {
-                // TODO: Put this in camera class.
-                f32 strength = 0.05f;
-                camera.fov -= strength * (wheel / WHEEL_DELTA);
-                camera.fov = glm::clamp(camera.fov, PI_32 / 180.f, PI_32 / 2.f);
-
+                camera.UpdateFOV(wheel / WHEEL_DELTA);
                 wheel %= WHEEL_DELTA;
             }
 
@@ -314,29 +256,19 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
     GLCall(glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW));
 
     shader.Use();
-
-    // volume_dims
-    GLCall(GLint location = glGetUniformLocation(shader.id, "volume_dims"));
-    GLCall(glUniform3i(location, 256, 256, 256));
-
-    // volume
-    GLCall(location = glGetUniformLocation(shader.id, "volume"));
-    GLCall(glUniform1i(location, 0));
+    shader.SetUniform3i("volume_dims", 256, 256, 256);
+    shader.SetUniform1i("volume", 0);
 
     while (!Win32WindowShouldQuit())
     {
         GLCall(glClearColor(0.1f, 0.1f, 0.1f, 1.f));
         GLCall(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
 
-        shader.Use();
-        GLCall(location = glGetUniformLocation(shader.id, "cam_pos"));
-        GLCall(glUniform3f(location, camera.position.x, camera.position.y, camera.position.z));
-
         glm::mat4 projection = glm::perspective(camera.fov, (f32)width / (f32)height, 0.1f, 100.f);       
-
         glm::mat4 pv = projection * camera.view;
-        GLCall(GLint pv_location = glGetUniformLocation(shader.id, "pv"));
-        GLCall(glUniformMatrix4fv(pv_location, 1, GL_FALSE, glm::value_ptr(pv)));
+
+        shader.SetUniformMatrix4fv("pv", glm::value_ptr(pv));
+        shader.SetUniform3f("cam_pos", camera.position.x, camera.position.y, camera.position.z);
 
         GLCall(glBindVertexArray(vao));
         GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo));
@@ -346,7 +278,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
         SwapBuffers(device_context);
     }
 
-    // NOTE(achal): Windows will automatically delete the context when it exits out of the program.
+    // NOTE: Windows will automatically delete the context when it exits out of the program.
 
     return 0;
 }

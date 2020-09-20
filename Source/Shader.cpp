@@ -19,6 +19,43 @@ Shader::Shader(const char* vertex_shader_path, const char* fragment_shader_path)
     GLCall(glDeleteShader(fragment_shader));
 }
 
+void Shader::SetUniform1i(const char* name, int v)
+{
+    GLCall(glUniform1i(GetUniformLocation(name), v));
+}
+
+void Shader::SetUniform3i(const char* name, int v0, int v1, int v2)
+{
+    GLCall(glUniform3i(GetUniformLocation(name), v0, v1, v2));
+}
+
+void Shader::SetUniform3f(const char* name, f32 v0, f32 v1, f32 v2)
+{
+    GLCall(glUniform3f(GetUniformLocation(name), v0, v1, v2));
+}
+
+void Shader::SetUniformMatrix4fv(const char* name, f32* v)
+{
+    GLCall(glUniformMatrix4fv(GetUniformLocation(name), 1, false, v));
+}
+
+GLint Shader::GetUniformLocation(const char* name)
+{
+    if (uniform_location_cache.find(name) != uniform_location_cache.end())
+        return uniform_location_cache[name];
+
+    GLCall(GLint location = glGetUniformLocation(id, name));
+    if (location == -1)
+    {
+        std::ostringstream oss;
+        oss << "Warning: " << name << " uniform isn't found!" << std::endl;
+        OutputDebugStringA(oss.str().c_str());
+    }
+    uniform_location_cache[name] = location;
+
+    return location;
+}
+
 GLuint Shader::ReadShader(const char* shader_path, ShaderType type) const
 {
     GLuint shader;
