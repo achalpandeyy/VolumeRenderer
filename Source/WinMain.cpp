@@ -198,6 +198,42 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
 
     GLCall(glBindTexture(GL_TEXTURE_3D, 0));
 
+    // Create a transfer function
+    glm::vec3 color_transfer_function[256];
+    color_transfer_function[0] = glm::vec3(0.91f, 0.7f, 0.61f);
+    color_transfer_function[80] = glm::vec3(0.91f, 0.7f, 0.61f);
+    color_transfer_function[82] = glm::vec3(1.f, 1.f, 0.85f);
+    color_transfer_function[255] = glm::vec3(1.f, 1.f, 0.85f);
+
+    float alpha_transfer_function[256];
+    alpha_transfer_function[0] = 0.f;
+    alpha_transfer_function[40] = 0.f;
+    alpha_transfer_function[60] = 0.2f;
+    alpha_transfer_function[63] = 0.05f;
+    alpha_transfer_function[80] = 0.0f;
+    alpha_transfer_function[82] = 0.9f;
+    alpha_transfer_function[255] = 1.f;
+
+    glm::vec4 transfer_function[256];
+    for (unsigned int i = 0; i < 256; ++i)
+        transfer_function[i] = { 1.f, 1.f, 1.f, 1.f };
+#if 1
+    // Make it into a 1D texture
+    GLuint transfer_function_texture;
+    GLCall(glGenTextures(1, &transfer_function_texture));
+
+    GLCall(glActiveTexture(GL_TEXTURE0 + 1));
+    GLCall(glBindTexture(GL_TEXTURE_1D, transfer_function_texture));
+    GLCall(glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE));
+    GLCall(glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_LINEAR));
+    GLCall(glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_LINEAR));
+
+    // Upload it to the GPU
+    GLCall(glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, 256, 0, GL_RGBA, GL_FLOAT, &transfer_function[0]));
+
+    GLCall(glBindTexture(GL_TEXTURE_1D, 0));
+#endif
+
     f32 vertices[] =
     {
         0.f, 0.f, 0.f,
@@ -258,6 +294,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
     shader.Use();
     shader.SetUniform3i("volume_dims", 256, 256, 256);
     shader.SetUniform1i("volume", 0);
+    shader.SetUniform1i("transfer_function", 1);
 
     while (!Win32WindowShouldQuit())
     {
@@ -272,7 +309,13 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
 
         GLCall(glBindVertexArray(vao));
         GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo));
+
+        GLCall(glActiveTexture(GL_TEXTURE0));
         GLCall(glBindTexture(GL_TEXTURE_3D, vol_texture));
+
+        GLCall(glActiveTexture(GL_TEXTURE0 + 1));
+        GLCall(glBindTexture(GL_TEXTURE_1D, transfer_function_texture));
+
         GLCall(glDrawElements(GL_TRIANGLES, 6 * 2 * 3, GL_UNSIGNED_INT, 0));
 
         SwapBuffers(device_context);

@@ -6,6 +6,7 @@ in vec3 view_ray_direction;
 
 uniform vec3 cam_pos;
 uniform sampler3D volume;
+uniform sampler1D transfer_function;
 uniform ivec3 volume_dims;
 
 vec2 IntersectBox(vec3 origin, vec3 direction);
@@ -27,7 +28,11 @@ void main()
     for (float t = t_hit.x; t < t_hit.y; t += dt)
     {
         float val = texture(volume, p).r;
-        vec4 val_color = vec4(val);
+
+        // Transfer function should come here somewhere, right?
+        vec4 val_color = texture(transfer_function, val);
+        // val_color = vec4(val);
+        // val_color.a *= 0.5f;
 
         color.rgb += (1.f - color.a) * val_color.a * val_color.rgb;
         color.a += (1.f - color.a) * val_color.a;
