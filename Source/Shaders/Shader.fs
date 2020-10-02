@@ -29,7 +29,6 @@ void main()
     {
         float val = texture(volume, p).r;
 
-        // Transfer function should come here somewhere, right?
         vec4 val_color = texture(transfer_function, val);
         // val_color = vec4(val);
         // val_color.a *= 0.5f;

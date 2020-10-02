@@ -149,6 +149,18 @@ b32 Win32WindowShouldQuit()
     return false;
 }
 
+template <typename T>
+void Lerp(unsigned int x0, unsigned int x1, T* values)
+{
+    T y0 = values[x0];
+    T y1 = values[x1];
+
+    T m = (y1 - y0) / (f32)(x1 - x0);
+
+    for (unsigned int i = x0 + 1; i <= x1 - 1; ++i)
+        values[i] = m * (f32)(i - x0) + y0;
+}
+
 int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_line, INT show_code)
 {
     HWND window = Win32CreateWindow(width, height, "Volume Renderer", instance);
@@ -205,6 +217,10 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
     color_transfer_function[82] = glm::vec3(1.f, 1.f, 0.85f);
     color_transfer_function[255] = glm::vec3(1.f, 1.f, 0.85f);
 
+    Lerp(0, 80, color_transfer_function);
+    Lerp(80, 82, color_transfer_function);
+    Lerp(82, 255, color_transfer_function);
+
     float alpha_transfer_function[256];
     alpha_transfer_function[0] = 0.f;
     alpha_transfer_function[40] = 0.f;
@@ -214,10 +230,17 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
     alpha_transfer_function[82] = 0.9f;
     alpha_transfer_function[255] = 1.f;
 
+    Lerp(0, 40, alpha_transfer_function);
+    Lerp(40, 60, alpha_transfer_function);
+    Lerp(60, 63, alpha_transfer_function);
+    Lerp(63, 80, alpha_transfer_function);
+    Lerp(80, 82, alpha_transfer_function);
+    Lerp(82, 255, alpha_transfer_function);
+
     glm::vec4 transfer_function[256];
     for (unsigned int i = 0; i < 256; ++i)
-        transfer_function[i] = { 1.f, 1.f, 1.f, 1.f };
-#if 1
+        transfer_function[i] = glm::vec4(color_transfer_function[i], alpha_transfer_function[i]);
+
     // Make it into a 1D texture
     GLuint transfer_function_texture;
     GLCall(glGenTextures(1, &transfer_function_texture));
@@ -232,7 +255,6 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
     GLCall(glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, 256, 0, GL_RGBA, GL_FLOAT, &transfer_function[0]));
 
     GLCall(glBindTexture(GL_TEXTURE_1D, 0));
-#endif
 
     f32 vertices[] =
     {
