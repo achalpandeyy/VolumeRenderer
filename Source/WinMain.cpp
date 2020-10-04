@@ -211,35 +211,39 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
     GLCall(glBindTexture(GL_TEXTURE_3D, 0));
 
     // Create a transfer function
-    glm::vec3 color_transfer_function[256];
-    color_transfer_function[0] = glm::vec3(0.91f, 0.7f, 0.61f);
-    color_transfer_function[80] = glm::vec3(0.91f, 0.7f, 0.61f);
-    color_transfer_function[82] = glm::vec3(1.f, 1.f, 0.85f);
-    color_transfer_function[255] = glm::vec3(1.f, 1.f, 0.85f);
+    const size_t transfer_function_texel_count = 1024;
+    glm::vec4 transfer_function[transfer_function_texel_count];
 
-    Lerp(0, 80, color_transfer_function);
-    Lerp(80, 82, color_transfer_function);
-    Lerp(82, 255, color_transfer_function);
+    // A scalar between 0 and 1
+    double position[11] =
+    {
+        0.016671299934387207, 0.059375025331974030, 0.10788870000000000,
+        0.12416851441241686, 0.30333566665649414, 0.31228730082511902,
+        0.37030640244483948, 0.49667409062385559, 0.50001919269561768,
+        0.62602716684341431, 0.73614190687361414
+    };
 
-    float alpha_transfer_function[256];
-    alpha_transfer_function[0] = 0.f;
-    alpha_transfer_function[40] = 0.f;
-    alpha_transfer_function[60] = 0.2f;
-    alpha_transfer_function[63] = 0.05f;
-    alpha_transfer_function[80] = 0.0f;
-    alpha_transfer_function[82] = 0.9f;
-    alpha_transfer_function[255] = 1.f;
+    // TODO: The above list of doubles need not be sorted, sort them and assert sorted
 
-    Lerp(0, 40, alpha_transfer_function);
-    Lerp(40, 60, alpha_transfer_function);
-    Lerp(60, 63, alpha_transfer_function);
-    Lerp(63, 80, alpha_transfer_function);
-    Lerp(80, 82, alpha_transfer_function);
-    Lerp(82, 255, alpha_transfer_function);
+    // Map the position to the index in transfer_function
+    size_t tf_idx[11];
+    for (unsigned int i = 0; i < 11; ++i)
+        tf_idx[i] = std::ceil(position[i] * (transfer_function_texel_count - 1));
 
-    glm::vec4 transfer_function[256];
-    for (unsigned int i = 0; i < 256; ++i)
-        transfer_function[i] = glm::vec4(color_transfer_function[i], alpha_transfer_function[i]);
+    transfer_function[tf_idx[0]] = { 0.0, 0.0, 0.0, 0.0 };
+    transfer_function[tf_idx[1]] = { 0.0352941193, 0.0352941193, 0.0352941193, 0.000000000 };
+    transfer_function[tf_idx[2]] = { 0.0549019612, 0.0549019612, 0.0549019612, 0.000000000 };
+    transfer_function[tf_idx[3]] = { 0.0594919622, 0.0594919622, 0.0594919622, 0.784574449 };
+    transfer_function[tf_idx[4]] = { 0.196398869, 0.505882382, 0.211871520, 0.739361703 };
+    transfer_function[tf_idx[5]] = { 0.0862745121, 0.0862745121, 0.0862745121, 0.396276593 };
+    transfer_function[tf_idx[6]] = { 0.113725491, 0.113725491, 0.113725491, 0.000000000 };
+    transfer_function[tf_idx[7]] = { 0.196398869, 0.505882382, 0.211871520, 0.348404258 };
+    transfer_function[tf_idx[8]] = { 0.120622568, 0.730693519, 0.992156863, 0.928191483 };
+    transfer_function[tf_idx[9]] = { 0.729411781, 0.105836578, 0.396841377, 0.308510631 };
+    transfer_function[tf_idx[10]] = { 0.196398869, 0.505882382, 0.211871520, 0.260638297 };
+
+    for (unsigned int i = 0; i < 10; ++i)
+        Lerp(tf_idx[i], tf_idx[i + 1], transfer_function);
 
     // Make it into a 1D texture
     GLuint transfer_function_texture;
@@ -252,7 +256,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
     GLCall(glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_LINEAR));
 
     // Upload it to the GPU
-    GLCall(glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, 256, 0, GL_RGBA, GL_FLOAT, &transfer_function[0]));
+    GLCall(glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, 1024, 0, GL_RGBA, GL_FLOAT, &transfer_function[0]));
 
     GLCall(glBindTexture(GL_TEXTURE_1D, 0));
 
