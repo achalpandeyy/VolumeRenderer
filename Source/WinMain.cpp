@@ -245,6 +245,12 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
     for (unsigned int i = 0; i < 10; ++i)
         Lerp(tf_idx[i], tf_idx[i + 1], transfer_function);
 
+    for (unsigned int i = 0; i < tf_idx[0]; ++i)
+        transfer_function[i] = transfer_function[tf_idx[0]];
+
+    for (unsigned int i = tf_idx[10] + 1; i < transfer_function_texel_count; ++i)
+        transfer_function[i] = transfer_function[tf_idx[10]];
+
     // Make it into a 1D texture
     GLuint transfer_function_texture;
     GLCall(glGenTextures(1, &transfer_function_texture));
@@ -256,7 +262,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
     GLCall(glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_LINEAR));
 
     // Upload it to the GPU
-    GLCall(glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, 1024, 0, GL_RGBA, GL_FLOAT, &transfer_function[0]));
+    GLCall(glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, transfer_function_texel_count, 0, GL_RGBA, GL_FLOAT, &transfer_function[0]));
 
     GLCall(glBindTexture(GL_TEXTURE_1D, 0));
 
@@ -264,35 +270,15 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
     {
         0.f, 0.f, 0.f,
         1.f, 0.f, 0.f,
-        1.f, 1.f, 0.f,
         0.f, 1.f, 0.f,
-
+        1.f, 1.f, 0.f,
         0.f, 0.f, 1.f,
         1.f, 0.f, 1.f,
-        1.f, 1.f, 1.f,
-        0.f, 1.f, 1.f
+        0.f, 1.f, 1.f,
+        1.f, 1.f, 1.f
     };
 
-    u32 indices[] =
-    {
-        0, 2, 1,
-        0, 3, 2,
-
-        6, 2, 3,
-        6, 3, 7,
-
-        1, 2, 6,
-        1, 6, 5,
-
-        7, 3, 0,
-        7, 0, 4,
-
-        0, 1, 5,
-        0, 5, 4,
-
-        6, 7, 4,
-        6, 4, 5
-    };
+    u32 indices[] = { 0, 1, 4, 5, 7, 1, 3, 0, 2, 4, 6, 7, 2, 3 };
 
     Shader shader("../Source/Shaders/Shader.vs", "../Source/Shaders/Shader.fs");
     
@@ -342,7 +328,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
         GLCall(glActiveTexture(GL_TEXTURE0 + 1));
         GLCall(glBindTexture(GL_TEXTURE_1D, transfer_function_texture));
 
-        GLCall(glDrawElements(GL_TRIANGLES, 6 * 2 * 3, GL_UNSIGNED_INT, 0));
+        GLCall(glDrawElements(GL_TRIANGLE_STRIP, 14, GL_UNSIGNED_INT, 0));
 
         SwapBuffers(device_context);
     }

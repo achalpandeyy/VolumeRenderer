@@ -13,6 +13,9 @@ vec2 IntersectBox(vec3 origin, vec3 direction);
 
 void main()
 {
+    // color = vec4(0.8f, 0.3f, 0.2f, 1.f);
+
+#if 1
     vec3 ray_dir = normalize(view_ray_direction);
 
     vec2 t_hit = IntersectBox(cam_pos, ray_dir);
@@ -21,8 +24,10 @@ void main()
 
     t_hit.x = max(t_hit.x, 0.f);
 
-    vec3 dt_vec = 1.f / (vec3(volume_dims) * abs(ray_dir));
-    float dt = min(dt_vec.x, min(dt_vec.y, dt_vec.z));
+    // vec3 dt_vec = 1.f / (vec3(volume_dims) * abs(ray_dir));
+    // float dt = min(dt_vec.x, min(dt_vec.y, dt_vec.z));
+
+    float dt = min(t_hit.y, t_hit.y / (5.f * length(ray_dir * volume_dims)));
 
     vec3 p = cam_pos + t_hit.x * ray_dir;
     for (float t = t_hit.x; t < t_hit.y; t += dt)
@@ -41,6 +46,7 @@ void main()
 
         p += dt * ray_dir;
     }
+#endif
 }
 
 vec2 IntersectBox(vec3 origin, vec3 direction)
