@@ -19,28 +19,12 @@ int height = 720;
 
 // TODO: Make this a member of non-platform window class, so it can be retrived by the windows ptr
 // (data stored on windows side)
-ArcballCamera camera(glm::vec3(0.5f), glm::vec3(0.5f, 0.5f, 3.f));
+ArcballCamera camera(glm::vec3(0.f, 0.f, 20.f), glm::vec3(0.f), width, height);
 
 // TODO: This seem to come together to form a Win32Mouse
 int last_x = width / 2;
 int last_y = height / 2;
 int wheel = 0;
-
-glm::vec3 ScreenToArcball(int x, int y)
-{
-    // Screen to NDC
-    glm::vec3 p = glm::vec3(2.f * ((f32)x / (f32)width) - 1.f, 1.f - 2.f * ((f32)y / (f32)height), 0.f);
-
-    f32 distance_sq = glm::dot(p, p);
-    if (distance_sq <= 1.f)
-    {
-        return glm::vec3(p[0], p[1], glm::sqrt(1.f - distance_sq));
-    }
-    else
-    {
-        return glm::normalize(p);
-    }
-}
 
 LRESULT CALLBACK Win32WindowCallback(HWND window, UINT message, WPARAM w_param, LPARAM l_param)
 {
@@ -57,13 +41,14 @@ LRESULT CALLBACK Win32WindowCallback(HWND window, UINT message, WPARAM w_param, 
             {
                 const POINTS mouse_pos = MAKEPOINTS(l_param);
 
-                glm::vec3 prev = ScreenToArcball(last_x, last_y);
-                glm::vec3 curr = ScreenToArcball(mouse_pos.x, mouse_pos.y);
+                if (!(mouse_pos.x == last_x && mouse_pos.y == last_y))
+                {
+                    // Update view matrix of the camera to incorporate rotation
+                    camera.Rotate({ last_x, last_y }, { mouse_pos.x, mouse_pos.y });
 
-                camera.Rotate(prev, curr);
-
-                last_x = mouse_pos.x;
-                last_y = mouse_pos.y;
+                    last_x = mouse_pos.x;
+                    last_y = mouse_pos.y;
+                }
             }
         } break;
 
@@ -88,7 +73,7 @@ LRESULT CALLBACK Win32WindowCallback(HWND window, UINT message, WPARAM w_param, 
 
             if (wheel >= WHEEL_DELTA || wheel <= -WHEEL_DELTA)
             {
-                camera.UpdateFOV(wheel / WHEEL_DELTA);
+                camera.SetFOV(wheel / WHEEL_DELTA);
                 wheel %= WHEEL_DELTA;
             }
 
@@ -211,6 +196,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
     GLCall(glBindTexture(GL_TEXTURE_3D, 0));
 
     // Create a transfer function
+    // TODO: This texel count makes too much total size on the stack, allocate this on heap
     const size_t transfer_function_texel_count = 1024;
     glm::vec4 transfer_function[transfer_function_texel_count];
 
@@ -280,6 +266,27 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
 
     u32 indices[] = { 0, 1, 4, 5, 7, 1, 3, 0, 2, 4, 6, 7, 2, 3 };
 
+    // Construct Model Matrix (brings to Model Space from Data Space)
+    glm::vec3 volume_dims(256);
+    glm::vec3 spacing(0.01f);
+    glm::mat3 basis;
+    basis[0] = { volume_dims.x * spacing.x, 0.f, 0.f };
+    basis[1] = { 0.f, volume_dims.y * spacing.y, 0.f };
+    basis[2] = { 0.f, 0.f, volume_dims.z * spacing.z };
+
+    glm::vec3 offset = -0.5f * (basis[0] + basis[1] + basis[2]);
+
+    glm::mat4 model(1.f);
+    model[0] = glm::vec4(basis[0], 0.f);
+    model[1] = glm::vec4(basis[1], 0.f);
+    model[2] = glm::vec4(basis[2], 0.f);
+    model[3] = glm::vec4(offset, 1.f);
+
+    // Construct World Matrix (brings to World Space from Model Space)
+    glm::mat4 world = glm::mat4(1.f);
+
+    // Generate Entry and Exit point textures
+
     Shader shader("../Source/Shaders/Shader.vs", "../Source/Shaders/Shader.fs");
     
     GLuint vao;
@@ -308,16 +315,17 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
     shader.SetUniform1i("volume", 0);
     shader.SetUniform1i("transfer_function", 1);
 
+    f32 degrees = 0.f;
+
     while (!Win32WindowShouldQuit())
     {
         GLCall(glClearColor(0.1f, 0.1f, 0.1f, 1.f));
         GLCall(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
 
-        glm::mat4 projection = glm::perspective(camera.fov, (f32)width / (f32)height, 0.1f, 100.f);       
-        glm::mat4 pv = projection * camera.view;
+        glm::mat4 pv = camera.projection * camera.view * world * model;
 
         shader.SetUniformMatrix4fv("pv", glm::value_ptr(pv));
-        shader.SetUniform3f("cam_pos", camera.position.x, camera.position.y, camera.position.z);
+        // shader.SetUniform3f("cam_pos", camera.look_from.x, camera.look_from.y, camera.look_from.z);
 
         GLCall(glBindVertexArray(vao));
         GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo));
