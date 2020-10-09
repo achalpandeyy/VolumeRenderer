@@ -14,7 +14,7 @@ struct Shader
     void SetUniform3f(const char* name, f32 v0, f32 v1, f32 v2);
     void SetUniformMatrix4fv(const char* name, f32* v);
 
-    inline void Use() const
+    inline void Bind() const
     {
         GLCall(glUseProgram(id));
     }

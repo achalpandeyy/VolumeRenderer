@@ -73,6 +73,7 @@ LRESULT CALLBACK Win32WindowCallback(HWND window, UINT message, WPARAM w_param, 
 
             if (wheel >= WHEEL_DELTA || wheel <= -WHEEL_DELTA)
             {
+                // Update projection matrix of the camera to incorporate zooming
                 camera.SetFOV(wheel / WHEEL_DELTA);
                 wheel %= WHEEL_DELTA;
             }
@@ -158,7 +159,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
     HDC device_context = GetDC(window);
     HGLRC opengl_context = Win32InitOpenGL(device_context);
 
-    GLCall(glEnable(GL_DEPTH_TEST));
+    // GLCall(glEnable(GL_DEPTH_TEST));
     GLCall(glViewport(0, 0, width, height));
 
     GLCall(LPCSTR version = (LPCSTR)glGetString(GL_VERSION));
@@ -252,6 +253,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
 
     GLCall(glBindTexture(GL_TEXTURE_1D, 0));
 
+#if 0
     f32 vertices[] =
     {
         0.f, 0.f, 0.f,
@@ -263,10 +265,23 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
         0.f, 1.f, 1.f,
         1.f, 1.f, 1.f
     };
+#endif
+
+    f32 vertices[] =
+    {
+        0.f, 0.f, 0.f,  0.f, 0.f, 0.f,
+        1.f, 0.f, 0.f,  1.f, 0.f, 0.f,
+        0.f, 1.f, 0.f,  0.f, 1.f, 0.f,
+        1.f, 1.f, 0.f,  1.f, 1.f, 0.f,
+        0.f, 0.f, 1.f,  0.f, 0.f, 1.f,
+        1.f, 0.f, 1.f,  1.f, 0.f, 1.f,
+        0.f, 1.f, 1.f,  0.f, 1.f, 1.f,
+        1.f, 1.f, 1.f,  1.f, 1.f, 1.f
+    };
 
     u32 indices[] = { 0, 1, 4, 5, 7, 1, 3, 0, 2, 4, 6, 7, 2, 3 };
 
-    // Construct Model Matrix (brings to Model Space from Data Space)
+    // Construct Model Matrix (brings to World Space from Model Space)
     glm::vec3 volume_dims(256);
     glm::vec3 spacing(0.01f);
     glm::mat3 basis;
@@ -282,11 +297,6 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
     model[2] = glm::vec4(basis[2], 0.f);
     model[3] = glm::vec4(offset, 1.f);
 
-    // Construct World Matrix (brings to World Space from Model Space)
-    glm::mat4 world = glm::mat4(1.f);
-
-    // Generate Entry and Exit point textures
-
     Shader shader("../Source/Shaders/Shader.vs", "../Source/Shaders/Shader.fs");
     
     GLuint vao;
@@ -298,45 +308,127 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
     GLCall(glBindBuffer(GL_ARRAY_BUFFER, vbo));
     GLCall(glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW));
 
-    GLsizei stride = 3 * sizeof(f32);
+    // GLsizei stride = 3 * sizeof(f32);
+    GLsizei stride = 6 * sizeof(f32);
 
     GLCall(glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (const void*)0));
     GLCall(glEnableVertexAttribArray(0));
 
-    GLCall(glBindVertexArray(0));
+    GLCall(glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, (const void*)(3 * sizeof(f32))));
+    GLCall(glEnableVertexAttribArray(1));
 
     GLuint ibo;
     GLCall(glGenBuffers(1, &ibo));
     GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo));
     GLCall(glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW));
 
-    shader.Use();
+    GLCall(glBindVertexArray(0));
+
+    shader.Bind();
     shader.SetUniform3i("volume_dims", 256, 256, 256);
     shader.SetUniform1i("volume", 0);
     shader.SetUniform1i("transfer_function", 1);
 
-    f32 degrees = 0.f;
+    f32 quad_vertices[] =
+    {
+        -1.0f,  1.0f,  0.0f, 1.0f,
+        -1.0f, -1.0f,  0.0f, 0.0f,
+         1.0f, -1.0f,  1.0f, 0.0f,
+
+        -1.0f,  1.0f,  0.0f, 1.0f,
+         1.0f, -1.0f,  1.0f, 0.0f,
+         1.0f,  1.0f,  1.0f, 1.0f
+    };
+
+    Shader screen_shader("../Source/Shaders/ScreenShader.vs", "../Source/Shaders/ScreenShader.fs");
+
+    GLuint quad_vao;
+    GLCall(glGenVertexArrays(1, &quad_vao));
+    GLCall(glBindVertexArray(quad_vao));
+
+    GLuint quad_vbo;
+    GLCall(glGenBuffers(1, &quad_vbo));
+    GLCall(glBindBuffer(GL_ARRAY_BUFFER, quad_vbo));
+    GLCall(glBufferData(GL_ARRAY_BUFFER, sizeof(quad_vertices), quad_vertices, GL_STATIC_DRAW));
+
+    int screen_stride = 4 * sizeof(f32);
+    GLCall(glEnableVertexAttribArray(0));
+    GLCall(glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, screen_stride, (const void*)0));
+
+    GLCall(glEnableVertexAttribArray(1));
+    GLCall(glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, screen_stride, (const void*)(2 * sizeof(f32))));
+
+    GLuint fbo;
+    GLCall(glGenFramebuffers(1, &fbo));
+    GLCall(glBindFramebuffer(GL_FRAMEBUFFER, fbo));
+
+    GLuint tex_color_buffer;
+    GLCall(glGenTextures(1, &tex_color_buffer));
+    GLCall(glBindTexture(GL_TEXTURE_2D, tex_color_buffer));
+    GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR));
+    GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR));
+    GLCall(glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL));
+    GLCall(glBindTexture(GL_TEXTURE_2D, 0));
+
+    GLCall(glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex_color_buffer, 0));
+
+    // Create a renderbuffer
+    GLuint rbo;
+    GLCall(glGenRenderbuffers(1, &rbo));
+    GLCall(glBindRenderbuffer(GL_RENDERBUFFER, rbo));
+    GLCall(glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height));
+    GLCall(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo));
+    GLCall(glBindRenderbuffer(GL_RENDERBUFFER, 0));
+
+    GLCall(b32 framebuffer_status = (glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE));
+    if (framebuffer_status)
+    {
+        OutputDebugStringA("NOTE: Framebuffer is complete!\n");
+    }
+
+    GLCall(glBindFramebuffer(GL_FRAMEBUFFER, 0));
+
+    screen_shader.Bind();
+    screen_shader.SetUniform1i("screen_texture", 0);
+
+    // GLuint exit_point_texture;
+    // GLCall(glGenTextures(1, &exit_point_texture));
+    // GLCall(glBindTexture)
 
     while (!Win32WindowShouldQuit())
     {
+        // First pass
+        GLCall(glBindFramebuffer(GL_FRAMEBUFFER, fbo));
+        GLCall(glEnable(GL_DEPTH_TEST));
         GLCall(glClearColor(0.1f, 0.1f, 0.1f, 1.f));
         GLCall(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
 
-        glm::mat4 pv = camera.projection * camera.view * world * model;
+        // Generate Entry and Exit point textures
 
-        shader.SetUniformMatrix4fv("pv", glm::value_ptr(pv));
-        // shader.SetUniform3f("cam_pos", camera.look_from.x, camera.look_from.y, camera.look_from.z);
+        shader.Bind();
+        glm::mat4 pvm = camera.projection * camera.view * model;
+        shader.SetUniformMatrix4fv("pvm", glm::value_ptr(pvm));
 
         GLCall(glBindVertexArray(vao));
-        GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo));
 
-        GLCall(glActiveTexture(GL_TEXTURE0));
-        GLCall(glBindTexture(GL_TEXTURE_3D, vol_texture));
-
-        GLCall(glActiveTexture(GL_TEXTURE0 + 1));
-        GLCall(glBindTexture(GL_TEXTURE_1D, transfer_function_texture));
+        // GLCall(glActiveTexture(GL_TEXTURE0));
+        // GLCall(glBindTexture(GL_TEXTURE_3D, vol_texture));
+        // GLCall(glActiveTexture(GL_TEXTURE0 + 1));
+        // GLCall(glBindTexture(GL_TEXTURE_1D, transfer_function_texture));
 
         GLCall(glDrawElements(GL_TRIANGLE_STRIP, 14, GL_UNSIGNED_INT, 0));
+
+        // Second Pass
+        GLCall(glBindFramebuffer(GL_FRAMEBUFFER, 0));
+        GLCall(glDisable(GL_DEPTH_TEST));
+        GLCall(glClearColor(1.f, 1.f, 1.f, 1.f));
+        GLCall(glClear(GL_COLOR_BUFFER_BIT));
+
+        screen_shader.Bind();
+        GLCall(glBindVertexArray(quad_vao));
+        GLCall(glActiveTexture(GL_TEXTURE0));
+        GLCall(glBindTexture(GL_TEXTURE_2D, tex_color_buffer));
+        GLCall(glDrawArrays(GL_TRIANGLES, 0, 6));
 
         SwapBuffers(device_context);
     }

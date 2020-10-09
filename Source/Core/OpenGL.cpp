@@ -26,6 +26,14 @@ extern PGLACTIVETEXTURE glActiveTexture = NULL;
 extern PGLTEXIMAGE3D glTexImage3D = NULL;
 extern PGLUNIFORM3I glUniform3i = NULL;
 extern PGLUNIFORM3F glUniform3f = NULL;
+extern PGLGENFRAMEBUFFERS glGenFramebuffers = NULL;
+extern PGLBINDFRAMEBUFFER glBindFramebuffer = NULL;
+extern PGLCHECKFRAMEBUFFERSTATUS glCheckFramebufferStatus = NULL;
+extern PGLFRAMEBUFFERTEXTURE2D glFramebufferTexture2D = NULL;
+extern PGLGENRENDERBUFFERS glGenRenderbuffers = NULL;
+extern PGLBINDRENDERBUFFER glBindRenderbuffer = NULL;
+extern PGLRENDERBUFFERSTORAGE glRenderbufferStorage = NULL;
+extern PGLFRAMEBUFFERRENDERBUFFER glFramebufferRenderbuffer = NULL;
 
 static PROC LoadProc(const char* name)
 {
@@ -103,6 +111,14 @@ extern HGLRC Win32InitOpenGL(HDC device_context)
     glTexImage3D = (PGLTEXIMAGE3D)LoadProc("glTexImage3D");
     glUniform3i = (PGLUNIFORM3I)LoadProc("glUniform3i");
     glUniform3f = (PGLUNIFORM3F)LoadProc("glUniform3f");
+    glGenFramebuffers = (PGLGENFRAMEBUFFERS)LoadProc("glGenFramebuffers");
+    glBindFramebuffer = (PGLBINDFRAMEBUFFER)LoadProc("glBindFramebuffer");
+    glCheckFramebufferStatus = (PGLCHECKFRAMEBUFFERSTATUS)LoadProc("glCheckFramebufferStatus");
+    glFramebufferTexture2D = (PGLFRAMEBUFFERTEXTURE2D)LoadProc("glFramebufferTexture2D");
+    glGenRenderbuffers = (PGLGENRENDERBUFFERS)LoadProc("glGenRenderbuffers");
+    glBindRenderbuffer = (PGLBINDRENDERBUFFER)LoadProc("glBindRenderbuffer");
+    glRenderbufferStorage = (PGLRENDERBUFFERSTORAGE)LoadProc("glRenderbufferStorage");
+    glFramebufferRenderbuffer = (PGLFRAMEBUFFERRENDERBUFFER)LoadProc("glFramebufferRenderbuffer");
 
     return opengl_context;
 }

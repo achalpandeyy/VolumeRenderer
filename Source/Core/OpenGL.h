@@ -25,6 +25,12 @@
 #define GL_TEXTURE_3D                     0x806F
 #define GL_TEXTURE_WRAP_R                 0x8072
 #define GL_CLAMP_TO_EDGE                  0x812F
+#define GL_FRAMEBUFFER                    0x8D40
+#define GL_FRAMEBUFFER_COMPLETE           0x8CD5
+#define GL_COLOR_ATTACHMENT0              0x8CE0
+#define GL_RENDERBUFFER                   0x8D41
+#define GL_DEPTH24_STENCIL8               0x88F0
+#define GL_DEPTH_STENCIL_ATTACHMENT       0x821A
 
 //
 // OpenGL types
@@ -47,7 +53,7 @@ typedef void (WINAPIP PGLGENBUFFERS)(GLsizei, GLuint*);
 extern PGLGENBUFFERS glGenBuffers;
 typedef void (WINAPIP PGLBINDBUFFER)(GLenum, GLuint);
 extern PGLBINDBUFFER glBindBuffer;
-typedef void (WINAPIP PGLBUFFERDATA)(GLenum, GLsizeiptr, const void*, GLenum);
+typedef void (WINAPIP PGLBUFFERDATA)(GLenum target, GLsizeiptr size, const void* data, GLenum usage);
 extern PGLBUFFERDATA glBufferData;
 typedef void (WINAPIP PGLVERTEXATTRIBPOINTER)(GLuint, GLint, GLenum, GLboolean, GLsizei, const void*);
 extern PGLVERTEXATTRIBPOINTER glVertexAttribPointer;
@@ -91,6 +97,22 @@ typedef void (WINAPIP PGLUNIFORM3I)(GLint location, GLint v0, GLint v1, GLint v2
 extern PGLUNIFORM3I glUniform3i;
 typedef void (WINAPIP PGLUNIFORM3F)(GLint location, GLfloat v0, GLfloat v1, GLfloat v2);
 extern PGLUNIFORM3F glUniform3f;
+typedef void (WINAPIP PGLGENFRAMEBUFFERS)(GLsizei n, GLuint* framebuffers);
+extern PGLGENFRAMEBUFFERS glGenFramebuffers;
+typedef void (WINAPIP PGLBINDFRAMEBUFFER)(GLenum target, GLuint framebuffer);
+extern PGLBINDFRAMEBUFFER glBindFramebuffer;
+typedef GLenum (WINAPIP PGLCHECKFRAMEBUFFERSTATUS)(GLenum target);
+extern PGLCHECKFRAMEBUFFERSTATUS glCheckFramebufferStatus;
+typedef void (WINAPIP PGLFRAMEBUFFERTEXTURE2D)(GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level);
+extern PGLFRAMEBUFFERTEXTURE2D glFramebufferTexture2D;
+typedef void (WINAPIP PGLGENRENDERBUFFERS)(GLsizei n, GLuint* renderbuffers);
+extern PGLGENRENDERBUFFERS glGenRenderbuffers;
+typedef void (WINAPIP PGLBINDRENDERBUFFER)(GLenum target, GLuint renderbuffer);
+extern PGLBINDRENDERBUFFER glBindRenderbuffer;
+typedef void (WINAPIP PGLRENDERBUFFERSTORAGE)(GLenum target, GLenum internalformat, GLsizei width, GLsizei height);
+extern PGLRENDERBUFFERSTORAGE glRenderbufferStorage;
+typedef void (WINAPIP PGLFRAMEBUFFERRENDERBUFFER)(GLenum target, GLenum attachment, GLenum renderbuffertarget, GLuint renderbuffer);
+extern PGLFRAMEBUFFERRENDERBUFFER glFramebufferRenderbuffer;
 
 //
 // Initialize OpenGL

@@ -3,6 +3,7 @@
 layout (location = 0) out vec4 color;
 
 in vec3 view_ray_direction;
+in vec3 v_color;
 
 uniform vec3 cam_pos;
 uniform sampler3D volume;
@@ -13,7 +14,9 @@ vec2 IntersectBox(vec3 origin, vec3 direction);
 
 void main()
 {
-    color = vec4(0.8f, 0.3f, 0.2f, 1.f);
+    // color = vec4(0.8f, 0.3f, 0.2f, 1.f);
+    // color = vec4(gl_FragCoord.xy / vec2(1280.f, 720.f), gl_FragCoord.z, 1.f);
+    color = vec4(v_color, 1.f);
 
 #if 0
     color = vec4(0.f);
