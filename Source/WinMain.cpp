@@ -19,7 +19,7 @@ int height = 720;
 
 // TODO: Make this a member of non-platform window class, so it can be retrived by the windows ptr
 // (data stored on windows side)
-ArcballCamera camera(glm::vec3(0.f, 0.f, 20.f), glm::vec3(0.f), width, height);
+ArcballCamera camera(glm::vec3(0.f, 0.f, 7.5f), glm::vec3(0.f), width, height);
 
 // TODO: This seem to come together to form a Win32Mouse
 int last_x = width / 2;
@@ -308,7 +308,6 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
     GLCall(glBindBuffer(GL_ARRAY_BUFFER, vbo));
     GLCall(glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW));
 
-    // GLsizei stride = 3 * sizeof(f32);
     GLsizei stride = 6 * sizeof(f32);
 
     GLCall(glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (const void*)0));
@@ -362,15 +361,25 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
     GLCall(glGenFramebuffers(1, &fbo));
     GLCall(glBindFramebuffer(GL_FRAMEBUFFER, fbo));
 
-    GLuint tex_color_buffer;
-    GLCall(glGenTextures(1, &tex_color_buffer));
-    GLCall(glBindTexture(GL_TEXTURE_2D, tex_color_buffer));
+    GLuint entry_point_texture;
+    GLCall(glGenTextures(1, &entry_point_texture));
+    GLCall(glBindTexture(GL_TEXTURE_2D, entry_point_texture));
     GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR));
     GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR));
     GLCall(glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL));
     GLCall(glBindTexture(GL_TEXTURE_2D, 0));
 
-    GLCall(glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex_color_buffer, 0));
+    GLCall(glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, entry_point_texture, 0));
+
+    GLuint exit_point_texture;
+    GLCall(glGenTextures(1, &exit_point_texture));
+    GLCall(glBindTexture(GL_TEXTURE_2D, exit_point_texture));
+    GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR));
+    GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR));
+    GLCall(glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL));
+    GLCall(glBindTexture(GL_TEXTURE_2D, 0));
+
+    GLCall(glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, exit_point_texture, 0));
 
     // Create a renderbuffer
     GLuint rbo;
@@ -391,32 +400,41 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
     screen_shader.Bind();
     screen_shader.SetUniform1i("screen_texture", 0);
 
-    // GLuint exit_point_texture;
-    // GLCall(glGenTextures(1, &exit_point_texture));
-    // GLCall(glBindTexture)
-
     while (!Win32WindowShouldQuit())
     {
-        // First pass
+        // Generate Entry and Exit point textures
         GLCall(glBindFramebuffer(GL_FRAMEBUFFER, fbo));
         GLCall(glEnable(GL_DEPTH_TEST));
         GLCall(glClearColor(0.1f, 0.1f, 0.1f, 1.f));
-        GLCall(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
-
-        // Generate Entry and Exit point textures
 
         shader.Bind();
         glm::mat4 pvm = camera.projection * camera.view * model;
         shader.SetUniformMatrix4fv("pvm", glm::value_ptr(pvm));
-
+        
         GLCall(glBindVertexArray(vao));
+
+        // Exit Point
+        GLCall(glDrawBuffer(GL_COLOR_ATTACHMENT1));
+        GLCall(glDepthFunc(GL_GREATER));
+
+        f32 old_depth;
+        GLCall(glGetFloatv(GL_DEPTH_CLEAR_VALUE, &old_depth));
+        GLCall(glClearDepth(0.f));
+
+        GLCall(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
+        GLCall(glDrawElements(GL_TRIANGLE_STRIP, 14, GL_UNSIGNED_INT, 0));
+
+        // Entry Point
+        GLCall(glDrawBuffer(GL_COLOR_ATTACHMENT0));
+        GLCall(glDepthFunc(GL_LESS));
+        GLCall(glClearDepth(old_depth));
+        GLCall(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
+        GLCall(glDrawElements(GL_TRIANGLE_STRIP, 14, GL_UNSIGNED_INT, 0));
 
         // GLCall(glActiveTexture(GL_TEXTURE0));
         // GLCall(glBindTexture(GL_TEXTURE_3D, vol_texture));
         // GLCall(glActiveTexture(GL_TEXTURE0 + 1));
         // GLCall(glBindTexture(GL_TEXTURE_1D, transfer_function_texture));
-
-        GLCall(glDrawElements(GL_TRIANGLE_STRIP, 14, GL_UNSIGNED_INT, 0));
 
         // Second Pass
         GLCall(glBindFramebuffer(GL_FRAMEBUFFER, 0));
@@ -427,7 +445,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
         screen_shader.Bind();
         GLCall(glBindVertexArray(quad_vao));
         GLCall(glActiveTexture(GL_TEXTURE0));
-        GLCall(glBindTexture(GL_TEXTURE_2D, tex_color_buffer));
+        GLCall(glBindTexture(GL_TEXTURE_2D, entry_point_texture));
         GLCall(glDrawArrays(GL_TRIANGLES, 0, 6));
 
         SwapBuffers(device_context);

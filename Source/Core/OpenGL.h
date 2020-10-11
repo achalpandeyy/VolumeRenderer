@@ -28,6 +28,7 @@
 #define GL_FRAMEBUFFER                    0x8D40
 #define GL_FRAMEBUFFER_COMPLETE           0x8CD5
 #define GL_COLOR_ATTACHMENT0              0x8CE0
+#define GL_COLOR_ATTACHMENT1              0x8CE1
 #define GL_RENDERBUFFER                   0x8D41
 #define GL_DEPTH24_STENCIL8               0x88F0
 #define GL_DEPTH_STENCIL_ATTACHMENT       0x821A
