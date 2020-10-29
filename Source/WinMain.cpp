@@ -1,7 +1,9 @@
 #include "Core/Win32.h"
-#include "Core/Types.h"
+#include "Util.h"
 #include "ArcballCamera.h"
 #include "Shader.h"
+#include "Texture2D.h"
+#include "Mesh.h"
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -29,108 +31,15 @@ void Lerp(unsigned int x0, unsigned int x1, T* values)
     T y0 = values[x0];
     T y1 = values[x1];
 
-    T m = (y1 - y0) / (f32)(x1 - x0);
+    T m = (y1 - y0) / (float)(x1 - x0);
 
     for (unsigned int i = x0 + 1; i <= x1 - 1; ++i)
-        values[i] = m * (f32)(i - x0) + y0;
+        values[i] = m * (float)(i - x0) + y0;
 }
 
 void FramebufferSizeCallback(GLFWwindow* window, int width, int height);
 void MouseCallback(GLFWwindow* window, double xpos, double ypos);
 void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset);
-
-// TODO: Is is required to free up resources in the destructor?
-struct Texture2D
-{
-    Texture2D(GLsizei width, GLsizei height, GLint internal_format, GLenum format, GLenum type)
-    {
-        GLCall(glGenTextures(1, &id));
-        Bind();
-
-        GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR));
-        GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR));
-        GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE));
-        GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE));
-
-        // NOTE: We can assume that these textures doesn't have any row alignment, since we ourselves are creating them
-        GLCall(glPixelStorei(GL_UNPACK_ALIGNMENT, 1));
-
-        GLCall(glTexImage2D(GL_TEXTURE_2D, 0, internal_format, width, height, 0, format, type, nullptr));
-    }
-
-    void inline Bind() const { GLCall(glBindTexture(GL_TEXTURE_2D, id)); }
-    void inline Unbind() const { GLCall(glBindTexture(GL_TEXTURE_2D, 0)); }
-
-    GLuint id;
-};
-
-struct Mesh
-{
-    Mesh(const std::vector<float>& vertices, unsigned int vertex_component_count, const std::vector<unsigned int>& indices)
-    {
-        GLCall(glGenVertexArrays(1, &vao));
-        BindVAO();
-
-        GLuint vbo;
-        GLCall(glGenBuffers(1, &vbo));
-        GLCall(glBindBuffer(GL_ARRAY_BUFFER, vbo));
-        GLCall(glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_STATIC_DRAW));
-
-        GLsizei stride = vertex_component_count * sizeof(float);
-        GLCall(glVertexAttribPointer(0, vertex_component_count, GL_FLOAT, GL_FALSE, stride, (const void*)0));
-        GLCall(glEnableVertexAttribArray(0));
-
-        GLuint ibo;
-        GLCall(glGenBuffers(1, &ibo));
-        GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo));
-        GLCall(glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), indices.data(), GL_STATIC_DRAW));
-
-        UnbindVAO();
-    }
-
-    inline void BindVAO() const { GLCall(glBindVertexArray(vao)); }
-    inline void UnbindVAO() const { GLCall(glBindVertexArray(0)); }
-
-private:
-    GLuint vao;
-};
-
-// TODO: Why do we have repeated vertices here??
-std::vector<float> GetUnitCubeVertices()
-{
-    return std::vector<float>
-    ({
-        0.f, 0.f, 0.f,
-        1.f, 0.f, 0.f,
-        0.f, 1.f, 0.f,
-        1.f, 1.f, 0.f,
-        0.f, 0.f, 1.f,
-        1.f, 0.f, 1.f,
-        0.f, 1.f, 1.f,
-        1.f, 1.f, 1.f  
-    });
-}
-
-std::vector<unsigned int> GetUnitCubeIndices()
-{
-    return std::vector<unsigned int>({ 0, 1, 4, 5, 7, 1, 3, 0, 2, 4, 6, 7, 2, 3 });
-}
-
-std::vector<float> GetNDCQuadVertices()
-{
-    return std::vector<float>
-    ({
-        -1.f, -1.f,
-         1.f, -1.f,
-         1.f,  1.f,
-        -1.f, 1.f
-    });
-}
-
-std::vector<unsigned int> GetNDCQuadIndices()
-{
-    return std::vector<unsigned int>({ 0, 1, 2, 2, 3, 0 });
-}
 
 int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_line, INT show_code)
 {
@@ -300,7 +209,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
 
     {
         // Check Framebuffer status here
-        GLCall(b32 framebuffer_status = (glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE));
+        GLCall(bool framebuffer_status = (glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE));
         if (framebuffer_status)
         {
             OutputDebugStringA("NOTE: Framebuffer is complete!\n");
@@ -326,7 +235,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
         GLCall(glDrawBuffer(GL_COLOR_ATTACHMENT1));
         GLCall(glDepthFunc(GL_GREATER));
 
-        f32 old_depth;
+        float old_depth;
         GLCall(glGetFloatv(GL_DEPTH_CLEAR_VALUE, &old_depth));
         GLCall(glClearDepth(0.f));
 
