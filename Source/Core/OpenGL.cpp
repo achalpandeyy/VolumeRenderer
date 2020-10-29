@@ -1,4 +1,10 @@
 #include "OpenGL.h"
+#include "Win32.h"
+
+#include <glad/glad.h>
+#include <sstream>
+
+#if 0
 
 extern PGLGENVERTEXARRAYS glGenVertexArrays = NULL;
 extern PGLBINDVERTEXARRAY glBindVertexArray = NULL;
@@ -122,6 +128,8 @@ extern HGLRC Win32InitOpenGL(HDC device_context)
 
     return opengl_context;
 }
+
+#endif
 
 void GLClearErrors()
 {

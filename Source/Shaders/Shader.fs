@@ -4,72 +4,83 @@ layout (location = 0) out vec4 out_frag_color;
 
 in vec3 color;
 
+uniform sampler2D entry_points_sampler;
+uniform sampler2D exit_points_sampler;
+
 uniform sampler3D volume;
 uniform sampler1D transfer_function;
 uniform ivec3 volume_dims;
 
-vec2 IntersectBox(vec3 origin, vec3 direction);
+#define REF_SAMPLING_INTERVAL 150.0
+
+#if 0
+void main()
+{
+    // TODO: This shouldn't be hardcoded
+    vec2 tex_coords = vec2(gl_FragCoord.x / 1280.f, gl_FragCoord.y / 720.f);
+    out_frag_color = texture(entry_points_sampler, tex_coords);
+}
+#endif
+
+#if 1
+#define REF_SAMPLING_INTERVAL 150.0
+
+vec4 RayTraversal(vec3 entry_point, vec3 exit_point)
+{
+    vec4 result = vec4(0.0);
+    vec3 ray_direction = exit_point - entry_point;
+    float t_end = length(ray_direction);
+    float dt = min(t_end, t_end / (7.806f * length(ray_direction * volume_dims)));
+    float sample_count = ceil(t_end / dt);
+
+    ray_direction = normalize(ray_direction);
+    float t = 0.5f * dt;
+    vec3 sample_pos;
+
+    while (t < t_end)
+    {
+        sample_pos = entry_point + t * ray_direction;
+
+        // val ranges from 0 to 1
+        float val = texture(volume, sample_pos).r;
+        vec4 val_color = texture(transfer_function, val);
+
+        // Opacity correction
+        val_color.a = 1.0 - pow(1.0 - val_color.a, dt * REF_SAMPLING_INTERVAL);
+
+        result.rgb += (1.f - result.a) * val_color.a * val_color.rgb;
+        result.a += (1.f - result.a) * val_color.a;
+
+        if (result.a >= 0.99f)
+            break;
+
+        t += dt;
+    }
+
+    return result;
+}
 
 void main()
 {
-    out_frag_color = vec4(color, 1.f);
+    vec2 tex_coords = vec2(gl_FragCoord.x / 1280.f, gl_FragCoord.y / 720.f);
+    vec3 entry_point = texture(entry_points_sampler, tex_coords).rgb;
+    vec3 exit_point = texture(exit_points_sampler, tex_coords).rgb;
 
-#if 0
-    color = vec4(0.f);
+    #if 1
+    vec4 out_color = vec4(0.0);
 
-    vec3 ray_dir = normalize(view_ray_direction);
-
-    vec2 t_hit = IntersectBox(cam_pos, ray_dir);
-    if (t_hit.x > t_hit.y)
-        discard;
-
-    t_hit.x = max(t_hit.x, 0.f);
-
-    vec3 entry_point = cam_pos + t_hit.x * ray_dir;
-    vec3 exit_point = cam_pos + t_hit.y * ray_dir;
-
-    // float t_end = length(exit_point - entry_point);
-    float t_end = length(view_ray_direction);
-    float dt = min(t_end, t_end / (2.f * length(view_ray_direction * volume_dims)));
-
-    // vec3 dt_vec = 1.f / (vec3(volume_dims) * abs(ray_dir));
-    // float dt = min(dt_vec.x, min(dt_vec.y, dt_vec.z));
-
-    // float dt = min(t_hit.y, t_hit.y / 2.f * (length(view_ray_direction * volume_dims)));
-
-    vec3 p = cam_pos + t_hit.x * ray_dir;
-    for (float t = t_hit.x; t < t_hit.y; t += dt)
+    if (entry_point != exit_point)
     {
-        float val = texture(volume, p).r;
-
-        vec4 val_color = texture(transfer_function, val);
-
-        color.rgb += (1.f - color.a) * val_color.a * val_color.rgb;
-        color.a += (1.f - color.a) * val_color.a;
-
-        if (color.a >= 0.99f)
-            break;
-
-        p += dt * ray_dir;
+        out_color = RayTraversal(entry_point, exit_point);
     }
+    #endif
+
+    // vec4 out_color = texture(exit_points_sampler, tex_coords); 
+
+    vec4 bg_color = vec4(0.5f, 0.5f, 0.5f, 1.f);
+
+    out_frag_color.a = out_color.a + bg_color.a - out_color.a * bg_color.a;
+    out_frag_color.rgb = bg_color.a * bg_color.rgb * (1.0  - out_color.a) + out_color.rgb * out_color.a;
+}
+
 #endif
-}
-
-vec2 IntersectBox(vec3 origin, vec3 direction)
-{
-    const vec3 box_min = vec3(0.0);
-    const vec3 box_max = vec3(1.0);
-
-    vec3 inv_dir = 1.0 / direction;
-
-    vec3 tmin_tmp = (box_min - origin) * inv_dir;
-    vec3 tmax_tmp = (box_max - origin) * inv_dir; 
-
-    vec3 tmin = min(tmin_tmp, tmax_tmp);
-    vec3 tmax = max(tmin_tmp, tmax_tmp);
-
-    float t0 = max(tmin.x, max(tmin.y, tmin.z));
-    float t1 = min(tmax.x, min(tmax.y, tmax.z));
-
-    return vec2(t0, t1);
-}

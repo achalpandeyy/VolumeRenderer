@@ -1,6 +1,8 @@
 #ifndef OPENGL_H
 
 #include "Core/Types.h"
+
+#if 0
 #include "Core/Win32.h"
 
 #include <gl/GL.h>
@@ -22,6 +24,9 @@
 #define GL_COMPILE_STATUS                 0x8B81
 #define GL_LINK_STATUS                    0x8B82
 #define GL_TEXTURE0                       0x84C0
+#define GL_TEXTURE1                       0x84C1
+#define GL_TEXTURE2                       0x84C2
+#define GL_TEXTURE3                       0x84C3
 #define GL_TEXTURE_3D                     0x806F
 #define GL_TEXTURE_WRAP_R                 0x8072
 #define GL_CLAMP_TO_EDGE                  0x812F
@@ -32,6 +37,7 @@
 #define GL_RENDERBUFFER                   0x8D41
 #define GL_DEPTH24_STENCIL8               0x88F0
 #define GL_DEPTH_STENCIL_ATTACHMENT       0x821A
+#define GL_R8                             0x8229
 
 //
 // OpenGL types
@@ -120,6 +126,7 @@ extern PGLFRAMEBUFFERRENDERBUFFER glFramebufferRenderbuffer;
 //
 
 extern HGLRC Win32InitOpenGL(HDC device_context);
+#endif
 
 //
 // OpenGL debugging stuff.

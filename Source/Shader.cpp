@@ -1,6 +1,8 @@
 #include "Shader.h"
 
+#include <iostream>
 #include <fstream>
+#include <sstream>
 
 Shader::Shader(const char* vertex_shader_path, const char* fragment_shader_path)
 {
@@ -47,9 +49,10 @@ GLint Shader::GetUniformLocation(const char* name)
     GLCall(GLint location = glGetUniformLocation(id, name));
     if (location == -1)
     {
-        std::ostringstream oss;
-        oss << "Warning: " << name << " uniform isn't found!" << std::endl;
-        OutputDebugStringA(oss.str().c_str());
+        // std::ostringstream oss;
+        // oss << "Warning: " << name << " uniform isn't found!" << std::endl;
+        // OutputDebugStringA(oss.str().c_str());
+        std::cout << "Warning: " << name << " uniform isn't found!" << std::endl;
     }
     uniform_location_cache[name] = location;
 
@@ -75,10 +78,11 @@ GLuint Shader::ReadShader(const char* shader_path, ShaderType type) const
     }
     else
     {
-        std::ostringstream oss;
+        // std::ostringstream oss;
         const char* shader_type = (type == ShaderType::VERTEX) ? "vertex" : "fragment";
-        oss << "Unable to open " << shader_type << " shader file at path " << shader_path << std::endl;
-        OutputDebugStringA(oss.str().c_str());
+        // oss << "Unable to open " << shader_type << " shader file at path " << shader_path << std::endl;
+        // OutputDebugStringA(oss.str().c_str());
+        std::cout << "Unable to open " << shader_type << " shader file at path " << shader_path << std::endl;
         exit(1);
     }
     in_file.close();
@@ -102,9 +106,10 @@ void Shader::CheckErrors(GLuint shader, ShaderType type) const
                 GLCall(glGetShaderInfoLog(shader, 1024, NULL, info_log));
 
                 const char* shader_type = (type == ShaderType::VERTEX) ? "vertex" : "fragment";
-                std::ostringstream oss;
-                oss << "OpenGL Error: Failed to compile " << shader_type << " shader!" <<  std::endl << info_log;
-                OutputDebugStringA(oss.str().c_str());
+                // std::ostringstream oss;
+                // oss << "OpenGL Error: Failed to compile " << shader_type << " shader!" <<  std::endl << info_log;
+                // OutputDebugStringA(oss.str().c_str());
+                std::cout << "OpenGL Error: Failed to compile " << shader_type << " shader!" << std::endl << info_log;
                 exit(1);
             }
         } break;
@@ -115,9 +120,10 @@ void Shader::CheckErrors(GLuint shader, ShaderType type) const
             if (!success)
             {
                 GLCall(glGetProgramInfoLog(id, 1024, NULL, info_log));
-                std::ostringstream oss;
-                oss << "OpenGL Error: Failed to link shader program!" << std::endl << info_log;
-                OutputDebugStringA(oss.str().c_str());
+                // std::ostringstream oss;
+                // oss << "OpenGL Error: Failed to link shader program!" << std::endl << info_log;
+                // OutputDebugStringA(oss.str().c_str());
+                std::cout << "OpenGL Error: Failed to link shader program!" << std::endl << info_log;
                 exit(1);
             }
         } break;
