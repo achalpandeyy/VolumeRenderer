@@ -13,18 +13,6 @@ uniform ivec3 volume_dims;
 
 #define REF_SAMPLING_INTERVAL 150.0
 
-#if 0
-void main()
-{
-    // TODO: This shouldn't be hardcoded
-    vec2 tex_coords = vec2(gl_FragCoord.x / 1280.f, gl_FragCoord.y / 720.f);
-    out_frag_color = texture(entry_points_sampler, tex_coords);
-}
-#endif
-
-#if 1
-#define REF_SAMPLING_INTERVAL 150.0
-
 vec4 RayTraversal(vec3 entry_point, vec3 exit_point)
 {
     vec4 result = vec4(0.0);
@@ -62,6 +50,7 @@ vec4 RayTraversal(vec3 entry_point, vec3 exit_point)
 
 void main()
 {
+    // TODO: This shouldn't be harcoded
     vec2 tex_coords = vec2(gl_FragCoord.x / 1280.f, gl_FragCoord.y / 720.f);
     vec3 entry_point = texture(entry_points_sampler, tex_coords).rgb;
     vec3 exit_point = texture(exit_points_sampler, tex_coords).rgb;
@@ -75,12 +64,8 @@ void main()
     }
     #endif
 
-    // vec4 out_color = texture(exit_points_sampler, tex_coords); 
-
     vec4 bg_color = vec4(0.5f, 0.5f, 0.5f, 1.f);
 
     out_frag_color.a = out_color.a + bg_color.a - out_color.a * bg_color.a;
     out_frag_color.rgb = bg_color.a * bg_color.rgb * (1.0  - out_color.a) + out_color.rgb * out_color.a;
 }
-
-#endif

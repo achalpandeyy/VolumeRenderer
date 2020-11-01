@@ -5,6 +5,9 @@
 #include "Texture2D.h"
 #include "Mesh.h"
 
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_opengl3.h>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
@@ -37,36 +40,196 @@ void Lerp(unsigned int x0, unsigned int x1, T* values)
         values[i] = m * (float)(i - x0) + y0;
 }
 
-void FramebufferSizeCallback(GLFWwindow* window, int width, int height);
-void MouseCallback(GLFWwindow* window, double xpos, double ypos);
-void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset);
+struct Window
+{
+    // Note: Creating multiple windows would mean multiple initializations of GLFW, which is
+    // fine for now since we have only a single window in the entire application. 
+    Window(int width, int height, const char* title)
+    {
+        glfwSetErrorCallback(GLFWErrorCallback);
+        if (!glfwInit())
+            exit(-1);
+
+        handle = glfwCreateWindow(width, height, title, NULL, NULL);
+        if (!handle)
+        {
+            glfwTerminate();
+            exit(-1);
+        }
+
+        glfwMakeContextCurrent(handle);
+
+        // TODO: Should I enable VSync?
+
+        glfwSetWindowUserPointer(handle, this);
+
+        glfwSetFramebufferSizeCallback(handle, FramebufferSizeCallback);
+        glfwSetCursorPosCallback(handle, MouseCallback);
+        glfwSetScrollCallback(handle, ScrollCallback);
+    }
+
+    ~Window()
+    {
+        glfwDestroyWindow(handle);
+        glfwTerminate();
+    }
+
+    inline bool ShouldClose() const
+    {
+        return glfwWindowShouldClose(handle);
+    }
+
+    inline void PollEvents() const
+    {
+        glfwPollEvents();
+    }
+
+    inline void SwapBuffers() const
+    {
+        glfwSwapBuffers(handle);
+    }
+
+    GLFWwindow* handle;
+    ImGuiIO* io;
+
+private:
+    static void FramebufferSizeCallback(GLFWwindow* window, int width, int height)
+    {
+        GLCall(glViewport(0, 0, width, height));
+    }
+
+    static void MouseCallback(GLFWwindow* window, double xpos, double ypos)
+    {
+        Window* this_window = (Window*)glfwGetWindowUserPointer(window);
+        if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_RELEASE || this_window->io->WantCaptureMouse)
+        {
+            last_x = xpos;
+            last_y = ypos;
+        }
+        else
+        {
+            if (!(xpos == last_x && ypos == last_y))
+            {
+                // Update view matrix of the camera to incorporate rotation
+                camera.Rotate({ last_x, last_y }, { xpos, ypos });
+
+                last_x = xpos;
+                last_y = ypos;
+            }
+        }
+    }
+
+    static void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset)
+    {
+        camera.SetFOV(yoffset);
+    }
+
+    static void GLFWErrorCallback(int error, const char* description)
+    {
+        std::ostringstream oss;
+        oss << "GLFW Error: [" << error << "] " << description << std::endl;
+        OutputDebugStringA(oss.str().c_str());
+    }
+};
+
+struct Application
+{
+    Application(Window* window)
+    {
+        // Initialize ImGui
+        IMGUI_CHECKVERSION();
+        ImGui::CreateContext();
+
+        window->io = &ImGui::GetIO();
+
+        ImGui::StyleColorsDark();
+
+        // Load OpenGL
+        // TODO: If write my OpenGL application with OpenGL version 4.6, would its .exe not run on machines
+        // having an OpenGL version lower than that??
+        if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+        {
+            std::cout << "Failed to initialize GLAD" << std::endl;
+            exit(-1);
+        }
+
+        // TODO: Is it necessary to even set the glsl version??
+        ImGui_ImplGlfw_InitForOpenGL(window->handle, true);
+        ImGui_ImplOpenGL3_Init("#version 330");
+    }
+
+    ~Application()
+    {
+        ImGui_ImplOpenGL3_Shutdown();
+        ImGui_ImplGlfw_Shutdown();
+        ImGui::DestroyContext();
+    }
+
+    void BeginFrame() const
+    {
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+        bool show_demo_window = true;
+        bool show_another_window = false;
+        ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.6f, 1.f);
+
+        // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
+        // You can remove imgui_demo.cpp from the project if you don't need this ImGui::ShowDemoWindow call
+        if (show_demo_window)
+            ImGui::ShowDemoWindow(&show_demo_window);
+
+        // 2. Show a simple window that we create ourselves. We use a Begin/End pair to created a named window.
+        {
+            static float f = 0.0f;
+            static int counter = 0;
+
+            ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
+
+            ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
+            ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
+            ImGui::Checkbox("Another Window", &show_another_window);
+
+            ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
+            ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
+
+            if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
+                counter++;
+            ImGui::SameLine();
+            ImGui::Text("counter = %d", counter);
+
+            ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+            ImGui::End();
+        }
+
+        // 3. Show another simple window.
+        if (show_another_window)
+        {
+            ImGui::Begin("Another Window", &show_another_window);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
+            ImGui::Text("Hello from another window!");
+            if (ImGui::Button("Close Me"))
+                show_another_window = false;
+            ImGui::End();
+        }
+
+        ImGui::Render();
+    }
+
+    void EndFrame() const
+    {
+        // Todo: Do I need to call the following line of code only after the rendering has finished??
+        // Can't I just call it in BeginFrame.
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    }
+};
 
 int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_line, INT show_code)
 {
-    GLFWwindow* window;
+    Window window(width, height, "Volume Renderer");
 
-    if (!glfwInit())
-        return -1;
-
-    window = glfwCreateWindow(width, height, "Volume Renderer", NULL, NULL);
-    if (!window)
-    {
-        glfwTerminate();
-        return -1;
-    }
-
-    glfwMakeContextCurrent(window);
-
-    glfwSetFramebufferSizeCallback(window, FramebufferSizeCallback);
-    glfwSetCursorPosCallback(window, MouseCallback);
-    glfwSetScrollCallback(window, ScrollCallback);
-
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
-    {
-        std::cout << "Failed to initialize GLAD" << std::endl;
-        return -1;
-    }
-
+    Application application(&window);
+   
     GLCall(glViewport(0, 0, width, height));
 
     GLuint vol_texture;
@@ -79,8 +242,18 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
     GLCall(glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR));
     GLCall(glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR));
 
-    // Read in the .raw file
-    std::ifstream file("../Resources/skull_256x256x256_uint8.raw", std::ios::in | std::ios::binary | std::ios::ate);
+    // glm::vec3 spacing(1.f);
+    // glm::ivec3 volume_dims(256, 256, 256);
+    // std::ifstream file("../Resources/skull_256x256x256_uint8.raw", std::ios::in | std::ios::binary | std::ios::ate);
+
+    glm::vec3 spacing(1.f, 1.f, 4.f);
+    glm::ivec3 volume_dims(341, 341, 93);
+    std::ifstream file("../Resources/statue_leg_341x341x93_uint8.raw", std::ios::in | std::ios::binary | std::ios::ate);
+
+    // glm::vec3 spacing(0.625f, 0.625f, 1.f);
+    // glm::ivec3 volume_dims(512, 512, 463);
+    // std::ifstream file("../Resources/prone_512x512x463_uint16.raw", std::ios::in | std::ios::binary | std::ios::ate);
+    
     if (file.is_open())
     {
         std::streampos pos = file.tellg();
@@ -91,12 +264,13 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
 
         // Upload it to the GPU, assuming that input volume data inherently doesn't have any row alignment.
         GLCall(glPixelStorei(GL_UNPACK_ALIGNMENT, 1));
-        GLCall(glTexImage3D(GL_TEXTURE_3D, 0, GL_R8, 256, 256, 256, 0, GL_RED, GL_UNSIGNED_BYTE, volume_data));
+
+        GLCall(glTexImage3D(GL_TEXTURE_3D, 0, GL_R8, (GLsizei)volume_dims.x, (GLsizei)volume_dims.y, (GLsizei)volume_dims.z,
+            0, GL_RED, GL_UNSIGNED_BYTE, volume_data));
     }
     else
     {
-        // OutputDebugStringA("Unable to open file!\n");
-        std::cout << "Unable to open file!" << std::endl;
+        OutputDebugStringA("Unable to open file!\n");
         exit(1);
     }
 
@@ -163,8 +337,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
     Mesh quad(GetNDCQuadVertices(), 2, GetNDCQuadIndices());
 
     // Construct Model Matrix (brings to World Space from Model Space)
-    glm::vec3 volume_dims(256);
-    glm::vec3 spacing(0.01f);
+    spacing *= 0.01f;
     glm::mat3 basis;
     basis[0] = { volume_dims.x * spacing.x, 0.f, 0.f };
     basis[1] = { 0.f, volume_dims.y * spacing.y, 0.f };
@@ -181,7 +354,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
     Shader shader("../Source/Shaders/Shader.vs", "../Source/Shaders/Shader.fs");
 
     shader.Bind();
-    shader.SetUniform3i("volume_dims", 256, 256, 256);
+    shader.SetUniform3i("volume_dims", volume_dims.x, volume_dims.y, volume_dims.z);
     shader.SetUniform1i("volume", 2);
     shader.SetUniform1i("transfer_function", 3);
 
@@ -218,8 +391,12 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
 
     GLCall(glBindFramebuffer(GL_FRAMEBUFFER, 0));
 
-    while (!glfwWindowShouldClose(window))
+    while (!window.ShouldClose())
     {
+        window.PollEvents();
+
+        application.BeginFrame();
+
         // Generate Entry and Exit point textures
         GLCall(glBindFramebuffer(GL_FRAMEBUFFER, entry_exit_points_fbo));
         GLCall(glEnable(GL_DEPTH_TEST));
@@ -272,43 +449,13 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
         GLCall(glBindTexture(GL_TEXTURE_3D, vol_texture));
         GLCall(glActiveTexture(GL_TEXTURE3));
         GLCall(glBindTexture(GL_TEXTURE_1D, transfer_function_texture));
-
+        
         GLCall(glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0));
 
-        glfwSwapBuffers(window);
-        glfwPollEvents();
+        application.EndFrame();
+
+        window.SwapBuffers();
     }
 
-    glfwTerminate();
     return 0;
-}
-
-void FramebufferSizeCallback(GLFWwindow* window, int width, int height)
-{
-    GLCall(glViewport(0, 0, width, height));
-}
-
-void MouseCallback(GLFWwindow* window, double xpos, double ypos)
-{
-    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_RELEASE)
-    {
-        last_x = xpos;
-        last_y = ypos;
-    }
-    else
-    {
-        if (!(xpos == last_x && ypos == last_y))
-        {
-            // Update view matrix of the camera to incorporate rotation
-            camera.Rotate({ last_x, last_y }, { xpos, ypos });
-
-            last_x = xpos;
-            last_y = ypos;
-        }
-    }
-}
-
-void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset)
-{
-    camera.SetFOV(yoffset);
 }
