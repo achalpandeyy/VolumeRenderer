@@ -4,29 +4,21 @@
 #include "Shader.h"
 #include "Texture2D.h"
 #include "Mesh.h"
+#include "Window.h"
 
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
+#include <imgui_internal.h>
 #include <glad/glad.h>
-#include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <algorithm>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <iostream>
 #include <vector>
-
-int width = 1280;
-int height = 720;
-
-// TODO: Make this a member of non-platform window class, so it can be retrived by the windows ptr
-// (data stored on windows side)
-ArcballCamera camera(glm::vec3(0.f, 0.f, 7.5f), glm::vec3(0.f), width, height);
-
-int last_x = width / 2;
-int last_y = height / 2;
 
 template <typename T>
 void Lerp(unsigned int x0, unsigned int x1, T* values)
@@ -40,97 +32,77 @@ void Lerp(unsigned int x0, unsigned int x1, T* values)
         values[i] = m * (float)(i - x0) + y0;
 }
 
-struct Window
+
+bool show_demo_window = true;
+bool show_settings_window = false;
+bool show_about_window = false;
+bool show_file_browser = false;
+bool show_hidden_items = false;
+std::string current_dir = "../";
+ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_OpenOnDoubleClick
+    | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+
+float sampling_rate = 2.f;
+
+void ListFilesAndDirectories()
 {
-    // Note: Creating multiple windows would mean multiple initializations of GLFW, which is
-    // fine for now since we have only a single window in the entire application. 
-    Window(int width, int height, const char* title)
-    {
-        glfwSetErrorCallback(GLFWErrorCallback);
-        if (!glfwInit())
-            exit(-1);
+    ImGui::Unindent(ImGui::GetTreeNodeToLabelSpacing());
 
-        handle = glfwCreateWindow(width, height, title, NULL, NULL);
-        if (!handle)
+    for (const auto& entry : std::filesystem::directory_iterator(current_dir))
+    {
+        const std::filesystem::path& filepath = entry.path();
+        std::string extension = filepath.extension().string();
+
+        bool is_item_hidden = FILE_ATTRIBUTE_HIDDEN & GetFileAttributesA(filepath.string().c_str());
+        bool is_item_displayable = (!is_item_hidden || (is_item_hidden && show_hidden_items))
+            && (entry.is_directory() || extension == ".raw" || extension == ".pvm");
+        if (is_item_displayable)
         {
-            glfwTerminate();
-            exit(-1);
-        }
+            const std::string& path = filepath.filename().string();
 
-        glfwMakeContextCurrent(handle);
-
-        // TODO: Should I enable VSync?
-
-        glfwSetWindowUserPointer(handle, this);
-
-        glfwSetFramebufferSizeCallback(handle, FramebufferSizeCallback);
-        glfwSetCursorPosCallback(handle, MouseCallback);
-        glfwSetScrollCallback(handle, ScrollCallback);
-    }
-
-    ~Window()
-    {
-        glfwDestroyWindow(handle);
-        glfwTerminate();
-    }
-
-    inline bool ShouldClose() const
-    {
-        return glfwWindowShouldClose(handle);
-    }
-
-    inline void PollEvents() const
-    {
-        glfwPollEvents();
-    }
-
-    inline void SwapBuffers() const
-    {
-        glfwSwapBuffers(handle);
-    }
-
-    GLFWwindow* handle;
-    ImGuiIO* io;
-
-private:
-    static void FramebufferSizeCallback(GLFWwindow* window, int width, int height)
-    {
-        GLCall(glViewport(0, 0, width, height));
-    }
-
-    static void MouseCallback(GLFWwindow* window, double xpos, double ypos)
-    {
-        Window* this_window = (Window*)glfwGetWindowUserPointer(window);
-        if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_RELEASE || this_window->io->WantCaptureMouse)
-        {
-            last_x = xpos;
-            last_y = ypos;
-        }
-        else
-        {
-            if (!(xpos == last_x && ypos == last_y))
+            // Todo: Display directory names in other color (say yellow) than the file names, and display
+            // hidden items in other colors as well
+            if (ImGui::TreeNodeEx(path.c_str(), flags))
             {
-                // Update view matrix of the camera to incorporate rotation
-                camera.Rotate({ last_x, last_y }, { xpos, ypos });
-
-                last_x = xpos;
-                last_y = ypos;
+                if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && ImGui::IsItemHovered(ImGuiHoveredFlags_None))
+                {
+                    if (entry.is_directory())
+                    {
+                        current_dir.append("/" + path);
+                    }
+                    else
+                    {
+                        // Todo: Open the damn volume
+                    }
+                }
             }
         }
     }
+}
 
-    static void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset)
-    {
-        camera.SetFOV(yoffset);
-    }
+void ListLogicalDrives()
+{
+    char buffer[64];
+    DWORD length = GetLogicalDriveStringsA(64, buffer);
 
-    static void GLFWErrorCallback(int error, const char* description)
+    ImGui::Unindent(ImGui::GetTreeNodeToLabelSpacing());
+
+    for (unsigned long i = 0; i < length; ++i)
     {
-        std::ostringstream oss;
-        oss << "GLFW Error: [" << error << "] " << description << std::endl;
-        OutputDebugStringA(oss.str().c_str());
+        bool is_drive_name = buffer[i] != ':' && buffer[i] != '\\' && buffer[i] != '\0';
+        if (is_drive_name)
+        {
+            if (ImGui::TreeNodeEx(&buffer[i], flags))
+            {
+                if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && ImGui::IsItemHovered(ImGuiHoveredFlags_None))
+                {
+                    current_dir += buffer[i];
+                    current_dir += ":/";
+                }
+            }
+        }
     }
-};
+}
 
 struct Application
 {
@@ -139,8 +111,6 @@ struct Application
         // Initialize ImGui
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
-
-        window->io = &ImGui::GetIO();
 
         ImGui::StyleColorsDark();
 
@@ -171,46 +141,170 @@ struct Application
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        bool show_demo_window = true;
-        bool show_another_window = false;
-        ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.6f, 1.f);
-
-        // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
-        // You can remove imgui_demo.cpp from the project if you don't need this ImGui::ShowDemoWindow call
+        // Note: You can remove imgui_demo.cpp from the project if you don't need this ImGui::ShowDemoWindow call
         if (show_demo_window)
             ImGui::ShowDemoWindow(&show_demo_window);
 
-        // 2. Show a simple window that we create ourselves. We use a Begin/End pair to created a named window.
+        if (ImGui::BeginMainMenuBar())
         {
-            static float f = 0.0f;
-            static int counter = 0;
+            if (ImGui::BeginMenu("File"))
+            {
+                if (ImGui::MenuItem("Open", "CTRL + O"))
+                {
+                    show_file_browser = true;
+                }
 
-            ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
+                ImGui::EndMenu();
+            }
 
-            ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
-            ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
-            ImGui::Checkbox("Another Window", &show_another_window);
+            if (ImGui::BeginMenu("Settings"))
+            {
+                show_settings_window = true;
+                ImGui::EndMenu();
+            }
 
-            ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
-            ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
+            if (ImGui::BeginMenu("About"))
+            {
+                show_about_window = true;
+                ImGui::EndMenu();
+            }
 
-            if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
-                counter++;
-            ImGui::SameLine();
-            ImGui::Text("counter = %d", counter);
+            ImGui::EndMainMenuBar();
+        }
 
+        if (show_settings_window)
+        {
+            ImGui::Begin("Settings");
+            ImGui::Checkbox("Demo Window", &show_demo_window);
+            ImGui::SliderFloat("Sampling Rate", &sampling_rate, 1.f, 20.f);
             ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
             ImGui::End();
         }
 
-        // 3. Show another simple window.
-        if (show_another_window)
+        if (show_file_browser)
         {
-            ImGui::Begin("Another Window", &show_another_window);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
-            ImGui::Text("Hello from another window!");
-            if (ImGui::Button("Close Me"))
-                show_another_window = false;
-            ImGui::End();
+            ImVec2 center(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f);
+            ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+            ImVec2 file_browser_dimensions = { 0.5f * ImGui::GetIO().DisplaySize.x, 0.5f * ImGui::GetIO().DisplaySize.y };
+            ImGui::SetNextWindowSizeConstraints(file_browser_dimensions, file_browser_dimensions);
+
+            ImGui::OpenPopup("File Browser");
+            if (ImGui::BeginPopupModal("File Browser", 0, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize))
+            {
+                // Distribute the file browser dimensions (in ratios) for different parts of the file browser
+                // 10% for the top bar showing the current directory and has the up button
+                // 62% for the enclosure which lists all the files
+                // 10% for the text field
+                // 10% for the Show Hidden Items checkbox and "Open" and "Cancel" buttons
+
+                std::string absolute_filepath = std::filesystem::absolute(current_dir).string();
+
+                // Todo: I need to make buttons for different parts of the filepath, instead of just a
+                // simple text string.
+                
+                const float file_tab_height = 0.1f * file_browser_dimensions.y;
+                ImGui::BeginChild("FileTab", ImVec2(0, file_tab_height));
+                if (ImGui::ArrowButton("ButtonUp", ImGuiDir_Up))
+                {
+                    // You cannot go back (up) a directory if you're already in the root directory of a logical
+                    // drive. From there just empty out the current directory and start building it again once
+                    // the user selects the logical drive.
+                    bool cannot_go_up = absolute_filepath.empty() || absolute_filepath.length() == 3;
+                    if (cannot_go_up)
+                    {
+                        current_dir = "";
+                    }
+                    else
+                    {
+                        current_dir += "/..";
+                        absolute_filepath = std::filesystem::absolute(current_dir).string();
+                    }
+                }
+
+                // Computer => C: => Projects => VolumeRenderer
+                ImGui::SameLine();
+                if (ImGui::Button("Computer"))
+                {
+
+                }
+
+                ImGui::SameLine();
+                ImGui::ArrowButtonEx("FakeButton", ImGuiDir_Right, ImVec2(10, 10), ImGuiButtonFlags_Disabled);
+
+                ImGui::SameLine();
+                if (ImGui::Button("C:"))
+                {
+                }
+
+                ImGui::SameLine();
+                if (ImGui::Button("Projects"))
+                {
+
+                }
+
+                ImGui::SameLine();
+                if (ImGui::Button("VolumeRenderer"))
+                {
+
+                }
+
+
+#if 0
+                ImGui::SameLine();
+                ImGui::Text(absolute_filepath.c_str());
+
+                ImGui::SameLine();
+                ImGui::Text("Computer");
+#endif
+                ImGui::EndChild();
+
+                const float file_list_height = 0.62f * file_browser_dimensions.y;
+                ImGui::BeginChild("FileList", ImVec2(0, file_list_height), true);
+                if (!current_dir.empty())
+                {
+                    ListFilesAndDirectories();
+                }
+                else
+                {
+                    ListLogicalDrives();
+                }
+                ImGui::EndChild();
+
+                const float search_field_height = 0.1f * file_browser_dimensions.y;
+                ImGui::BeginChild("SearchField", ImVec2(0, search_field_height), false);
+                char buf[64];
+                ImGui::InputText("Label", buf, 64);
+                ImGui::EndChild();
+
+                const float button_group_height = 0.1f * file_browser_dimensions.y;
+                ImGui::BeginChild("ButtonGroup", ImVec2(0, button_group_height));
+                ImGui::SetCursorPosY(button_group_height * 0.2f);
+
+                ImGui::Checkbox("Show Hidden Files", &show_hidden_items);
+
+                ImVec2 button_size = { button_group_height * 2.f, button_group_height * 0.75f };
+                ImGui::SameLine();
+                ImGui::SetCursorPosX(file_browser_dimensions.x - 2.25f * button_size.x);
+
+                // Open Button
+                if (ImGui::Button("Open", button_size))
+                {
+
+                }
+
+                ImGui::SameLine();
+
+                // Cancel Button
+                if (ImGui::Button("Cancel", button_size))
+                {
+                    show_file_browser = false;
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::EndChild();
+
+                ImGui::EndPopup();
+            }
         }
 
         ImGui::Render();
@@ -218,14 +312,14 @@ struct Application
 
     void EndFrame() const
     {
-        // Todo: Do I need to call the following line of code only after the rendering has finished??
-        // Can't I just call it in BeginFrame.
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
     }
 };
 
 int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_line, INT show_code)
 {
+    int width = 1280;
+    int height = 720;
     Window window(width, height, "Volume Renderer");
 
     Application application(&window);
@@ -242,13 +336,13 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
     GLCall(glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR));
     GLCall(glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR));
 
-    // glm::vec3 spacing(1.f);
-    // glm::ivec3 volume_dims(256, 256, 256);
-    // std::ifstream file("../Resources/skull_256x256x256_uint8.raw", std::ios::in | std::ios::binary | std::ios::ate);
+    glm::vec3 spacing(1.f);
+    glm::ivec3 volume_dims(256, 256, 256);
+    std::ifstream file("../Resources/skull_256x256x256_uint8.raw", std::ios::in | std::ios::binary | std::ios::ate);
 
-    glm::vec3 spacing(1.f, 1.f, 4.f);
-    glm::ivec3 volume_dims(341, 341, 93);
-    std::ifstream file("../Resources/statue_leg_341x341x93_uint8.raw", std::ios::in | std::ios::binary | std::ios::ate);
+    // glm::vec3 spacing(1.f, 1.f, 4.f);
+    // glm::ivec3 volume_dims(341, 341, 93);
+    // std::ifstream file("../Resources/statue_leg_341x341x93_uint8.raw", std::ios::in | std::ios::binary | std::ios::ate);
 
     // glm::vec3 spacing(0.625f, 0.625f, 1.f);
     // glm::ivec3 volume_dims(512, 512, 463);
@@ -432,6 +526,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
         shader.SetUniformMatrix4fv("pvm", glm::value_ptr(pvm));
         shader.SetUniform1i("entry_points_sampler", 0);
         shader.SetUniform1i("exit_points_sampler", 1);
+        shader.SetUniform1f("sampling_rate", sampling_rate);
 
         GLCall(glBindFramebuffer(GL_FRAMEBUFFER, 0));
         GLCall(glClearColor(0.5f, 0.5f, 0.5f, 1.f));

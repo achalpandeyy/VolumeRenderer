@@ -11,6 +11,8 @@ uniform sampler3D volume;
 uniform sampler1D transfer_function;
 uniform ivec3 volume_dims;
 
+uniform float sampling_rate;
+
 #define REF_SAMPLING_INTERVAL 150.0
 
 vec4 RayTraversal(vec3 entry_point, vec3 exit_point)
@@ -18,7 +20,7 @@ vec4 RayTraversal(vec3 entry_point, vec3 exit_point)
     vec4 result = vec4(0.0);
     vec3 ray_direction = exit_point - entry_point;
     float t_end = length(ray_direction);
-    float dt = min(t_end, t_end / (7.806f * length(ray_direction * volume_dims)));
+    float dt = min(t_end, t_end / (sampling_rate * length(ray_direction * volume_dims)));
     float sample_count = ceil(t_end / dt);
 
     ray_direction = normalize(ray_direction);

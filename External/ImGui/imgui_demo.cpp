@@ -730,9 +730,9 @@ static void ShowDemoWindowWidgets()
             {
                 // Disable the default "open on single-click behavior" + set Selected flag according to our selection.
                 ImGuiTreeNodeFlags node_flags = base_flags;
-                const bool is_selected = (selection_mask & (1 << i)) != 0;
-                if (is_selected)
-                    node_flags |= ImGuiTreeNodeFlags_Selected;
+                // const bool is_selected = (selection_mask & (1 << i)) != 0;
+                // if (is_selected)
+                //     node_flags |= ImGuiTreeNodeFlags_Selected;
                 if (i < 3)
                 {
                     // Items 0..2 are Tree Node
@@ -2719,8 +2719,8 @@ static void ShowDemoWindowLayout()
             "You may want to also explicitly specify content width by using SetNextWindowContentWidth() before Begin().");
         static int lines = 7;
         ImGui::SliderInt("Lines", &lines, 1, 15);
-        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2.0f, 1.0f));
+        // ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
+        // ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2.0f, 1.0f));
         ImVec2 scrolling_child_size = ImVec2(0, ImGui::GetFrameHeightWithSpacing() * 7 + 30);
         ImGui::BeginChild("scrolling", scrolling_child_size, true, ImGuiWindowFlags_HorizontalScrollbar);
         for (int line = 0; line < lines; line++)
@@ -2749,7 +2749,7 @@ static void ShowDemoWindowLayout()
         float scroll_x = ImGui::GetScrollX();
         float scroll_max_x = ImGui::GetScrollMaxX();
         ImGui::EndChild();
-        ImGui::PopStyleVar(2);
+        // ImGui::PopStyleVar(2);
         float scroll_x_delta = 0.0f;
         ImGui::SmallButton("<<");
         if (ImGui::IsItemActive())

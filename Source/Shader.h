@@ -12,6 +12,7 @@ struct Shader
 
     void SetUniform1i(const char* name, int v);
     void SetUniform3i(const char* name, int v0, int v1, int v2);
+    void SetUniform1f(const char* name, float val);
     void SetUniform3f(const char* name, float v0, float v1, float v2);
     void SetUniformMatrix4fv(const char* name, float* v);
 
