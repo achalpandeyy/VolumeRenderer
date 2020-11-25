@@ -3,6 +3,7 @@
 
 #include <imgui_internal.h>
 #include <filesystem>
+#include <vector>
 
 void ImGuiFileBrowser::Open()
 {
@@ -25,19 +26,41 @@ void ImGuiFileBrowser::Open()
     }
 }
 
+std::vector<std::string> ParsePath(const std::string& path)
+{
+    std::vector<std::string> result;
+    std::size_t prev_pos = 0;
+    std::size_t pos = path.find("\\", prev_pos);
+
+    while (pos != std::string::npos)
+    {
+        result.push_back(path.substr(prev_pos, pos - prev_pos));
+        prev_pos = pos + 1;
+        pos = path.find("\\", prev_pos);
+    }
+    return result;
+}
+
+void DrawFakeArrowButton()
+{
+    ImGui::SameLine(0.f, 0.f);
+    float frame_height = ImGui::GetFrameHeight();
+    ImGui::ArrowButtonEx("FakeButton", ImGuiDir_Right, ImVec2(frame_height, frame_height), ImGuiButtonFlags_Disabled);
+}
+
 void ImGuiFileBrowser::DrawFileTab()
 {
-    // Todo: I need to make buttons for different parts of the filepath, instead of just a
-    // simple text string.
-
     std::string absolute_filepath = std::filesystem::absolute(current_dir).string();
 
     const float file_browser_height = 0.5f * ImGui::GetIO().DisplaySize.y;
     const float file_tab_height = 0.1f * file_browser_height;
-    ImGui::BeginChild("FileTab", ImVec2(0, file_tab_height));
+
+    ImGui::BeginChild("FileTab", ImVec2(0, file_tab_height), true);
+
+    // Up button
     if (ImGui::ArrowButton("ButtonUp", ImGuiDir_Up))
     {
-        // You cannot go back (up) a directory if you're already in the root directory of a logical
+        // You cannot go up a directory if you're already in the root directory of a logical
         // drive. From there just empty out the current directory and start building it again once
         // the user selects the logical drive.
         bool cannot_go_up = absolute_filepath.empty() || absolute_filepath.length() == 3;
@@ -52,32 +75,30 @@ void ImGuiFileBrowser::DrawFileTab()
         }
     }
 
-    // Computer => C: => Projects => VolumeRenderer
+    std::vector<std::string> directories = ParsePath(absolute_filepath);
+
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 1.0f, 1.0f, 0.f));
+
     ImGui::SameLine();
     if (ImGui::Button("Computer"))
     {
 
     }
 
-    ImGui::SameLine();
-    ImGui::ArrowButtonEx("FakeButton", ImGuiDir_Right, ImVec2(10, 10), ImGuiButtonFlags_Disabled);
-
-    ImGui::SameLine();
-    if (ImGui::Button("C:"))
+    DrawFakeArrowButton();
+    
+    for (size_t i = 0; i < directories.size(); ++i)
     {
+        ImGui::SameLine(0.f, 0.f);
+        if (ImGui::Button(directories[i].c_str()))
+        {
+
+        }
+
+        if (i != directories.size() - 1) DrawFakeArrowButton();
     }
+    ImGui::PopStyleColor();
 
-    ImGui::SameLine();
-    if (ImGui::Button("Projects"))
-    {
-
-    }
-
-    ImGui::SameLine();
-    if (ImGui::Button("VolumeRenderer"))
-    {
-
-    }
     ImGui::EndChild();
 }
 
@@ -136,8 +157,6 @@ void ImGuiFileBrowser::ListFilesAndDirectories()
         {
             const std::string& path = filepath.filename().string();
 
-            // Todo: Display directory names in other color (say yellow) than the file names, and display
-            // hidden items in other colors as well
             ImVec4 text_color = GetListItemTextColor(entry.is_directory(), is_item_hidden);
             ImGui::PushStyleColor(ImGuiCol_Text, text_color);
             if (ImGui::TreeNodeEx(path.c_str(), flags))

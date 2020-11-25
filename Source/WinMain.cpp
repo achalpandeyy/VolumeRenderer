@@ -86,6 +86,7 @@ struct Application
         if (show_demo_window)
             ImGui::ShowDemoWindow(&show_demo_window);
 
+        // Set window rounding to 0
         if (ImGui::BeginMainMenuBar())
         {
             if (ImGui::BeginMenu("File"))
