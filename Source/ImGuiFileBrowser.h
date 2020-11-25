@@ -3,10 +3,12 @@
 #include <imgui.h>
 #include <string>
 
+// Todo: Add a text field to search for files in the Choose File dialog and write the name of file
+// in Save File dialog
+
 // Distribute the file browser dimensions (in ratios) for different parts of the file browser
 // 10% for the top bar showing the current directory and has the up button
-// 62% for the enclosure which lists all the files
-// 10% for the text field
+// 72% for the enclosure which lists all the files
 // 10% for the Show Hidden Items checkbox and "Open" and "Cancel" buttons
 struct ImGuiFileBrowser
 {
@@ -16,8 +18,14 @@ struct ImGuiFileBrowser
     inline void SetVisible(bool v) { visible = v; }
 
 private:
+    void DrawFileTab();
+    void DrawFileList();
+    void DrawButtonGroup();
+
     void ListFilesAndDirectories();
     void ListLogicalDrives();
+
+    static ImVec4 GetListItemTextColor(bool is_directory, bool is_hidden);
 
     bool visible = false;
     bool show_hidden_items = false;

@@ -38,7 +38,6 @@ bool show_file_browser = false;
 
 float sampling_rate = 2.f;
 
-
 // - File browser UI/Save Image UI
 // - Transfer function UI
 
@@ -65,7 +64,8 @@ struct Application
         ImGui_ImplGlfw_InitForOpenGL(window->handle, true);
         ImGui_ImplOpenGL3_Init("#version 330");
 
-        // Create ImGuiFileBrowser here
+        // Create ImGuiFileBrowser after initializing ImGui, obviously
+        file_browser = std::make_unique<ImGuiFileBrowser>();
     }
 
     ~Application()
@@ -93,7 +93,7 @@ struct Application
                 // Todo: This Ctrl + O shortcut doesn't work! 
                 if (ImGui::MenuItem("Open", "CTRL + O"))
                 {
-                    file_browser.SetVisible(true);
+                    file_browser->SetVisible(true);
                 }
 
                 ImGui::EndMenu();
@@ -123,9 +123,9 @@ struct Application
             ImGui::End();
         }
 
-        if (file_browser.IsVisible())
+        if (file_browser->IsVisible())
         {
-            file_browser.Open();
+            file_browser->Open();
         }
 
         ImGui::Render();
@@ -136,7 +136,7 @@ struct Application
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
     }
 
-    ImGuiFileBrowser file_browser;
+    std::unique_ptr<ImGuiFileBrowser> file_browser = nullptr;
 };
 
 int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_line, INT show_code)
