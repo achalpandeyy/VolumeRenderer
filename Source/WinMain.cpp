@@ -1,4 +1,4 @@
-#include "Core/Win32.h"
+﻿#include "Core/Win32.h"
 #include "Util.h"
 #include "ArcballCamera.h"
 #include "Shader.h"
@@ -63,6 +63,8 @@ struct Application
         // TODO: Is it necessary to even set the glsl version??
         ImGui_ImplGlfw_InitForOpenGL(window->handle, true);
         ImGui_ImplOpenGL3_Init("#version 330");
+
+        // ImGui::GetStyle().ScrollbarSize = 1.f;
 
         // Create ImGuiFileBrowser after initializing ImGui, obviously
         file_browser = std::make_unique<ImGuiFileBrowser>();

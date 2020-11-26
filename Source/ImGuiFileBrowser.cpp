@@ -5,6 +5,32 @@
 #include <filesystem>
 #include <vector>
 
+std::vector<std::string> ParsePath(std::string path)
+{
+    // Add a trailing slash
+    if (path.back() != '\\')
+        path += "\\";
+
+    std::vector<std::string> result;
+    std::size_t prev_pos = 0;
+    std::size_t pos = path.find("\\", prev_pos);
+
+    while (pos != std::string::npos)
+    {
+        result.push_back(path.substr(prev_pos, pos - prev_pos));
+        prev_pos = pos + 1;
+        pos = path.find("\\", prev_pos);
+    }
+    return result;
+}
+
+void DrawFakeArrowButton()
+{
+    ImGui::SameLine(0.f, 0.f);
+    float frame_height = ImGui::GetFrameHeight();
+    ImGui::ArrowButtonEx("FakeButton", ImGuiDir_Right, ImVec2(frame_height, frame_height), ImGuiButtonFlags_Disabled);
+}
+
 void ImGuiFileBrowser::Open()
 {
     // Set the file browser window to be appear at the center
@@ -26,28 +52,6 @@ void ImGuiFileBrowser::Open()
     }
 }
 
-std::vector<std::string> ParsePath(const std::string& path)
-{
-    std::vector<std::string> result;
-    std::size_t prev_pos = 0;
-    std::size_t pos = path.find("\\", prev_pos);
-
-    while (pos != std::string::npos)
-    {
-        result.push_back(path.substr(prev_pos, pos - prev_pos));
-        prev_pos = pos + 1;
-        pos = path.find("\\", prev_pos);
-    }
-    return result;
-}
-
-void DrawFakeArrowButton()
-{
-    ImGui::SameLine(0.f, 0.f);
-    float frame_height = ImGui::GetFrameHeight();
-    ImGui::ArrowButtonEx("FakeButton", ImGuiDir_Right, ImVec2(frame_height, frame_height), ImGuiButtonFlags_Disabled);
-}
-
 void ImGuiFileBrowser::DrawFileTab()
 {
     std::string absolute_filepath = std::filesystem::absolute(current_dir).string();
@@ -55,7 +59,8 @@ void ImGuiFileBrowser::DrawFileTab()
     const float file_browser_height = 0.5f * ImGui::GetIO().DisplaySize.y;
     const float file_tab_height = 0.1f * file_browser_height;
 
-    ImGui::BeginChild("FileTab", ImVec2(0, file_tab_height), true);
+    ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 2.f);
+    ImGui::BeginChild("FileTab", ImVec2(0, file_tab_height), true, ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
     // Up button
     if (ImGui::ArrowButton("ButtonUp", ImGuiDir_Up))
@@ -75,29 +80,35 @@ void ImGuiFileBrowser::DrawFileTab()
         }
     }
 
-    std::vector<std::string> directories = ParsePath(absolute_filepath);
-
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 1.0f, 1.0f, 0.f));
 
     ImGui::SameLine();
     if (ImGui::Button("Computer"))
     {
-
+        current_dir = "";
     }
 
-    DrawFakeArrowButton();
-    
-    for (size_t i = 0; i < directories.size(); ++i)
+    if (!absolute_filepath.empty())
     {
-        ImGui::SameLine(0.f, 0.f);
-        if (ImGui::Button(directories[i].c_str()))
+        std::vector<std::string> directories = ParsePath(absolute_filepath);
+        for (size_t i = 0; i < directories.size(); ++i)
         {
+            DrawFakeArrowButton();
 
+            ImGui::SameLine(0.f, 0.f);
+            if (ImGui::Button(directories[i].c_str()))
+            {
+                current_dir = "";
+                for (size_t k = 0; k <= i; ++k)
+                {
+                    current_dir += directories[k];
+                    current_dir += "\\";
+                }
+            }
         }
-
-        if (i != directories.size() - 1) DrawFakeArrowButton();
     }
     ImGui::PopStyleColor();
+    ImGui::PopStyleVar();
 
     ImGui::EndChild();
 }
@@ -140,7 +151,6 @@ void ImGuiFileBrowser::DrawButtonGroup()
     ImGui::EndChild();
 }
 
-// Todo: We can't handle directories with spaces in their name!!
 void ImGuiFileBrowser::ListFilesAndDirectories()
 {
     ImGui::Unindent(ImGui::GetTreeNodeToLabelSpacing());
@@ -150,7 +160,7 @@ void ImGuiFileBrowser::ListFilesAndDirectories()
         const std::filesystem::path& filepath = entry.path();
         std::string extension = filepath.extension().string();
 
-        bool is_item_hidden = FILE_ATTRIBUTE_HIDDEN & GetFileAttributesA(filepath.string().c_str());
+        bool is_item_hidden = FILE_ATTRIBUTE_HIDDEN & GetFileAttributesW(filepath.wstring().c_str());
         bool is_item_displayable = (!is_item_hidden || (is_item_hidden && show_hidden_items))
             && (entry.is_directory() || extension == ".raw" || extension == ".pvm");
         if (is_item_displayable)
