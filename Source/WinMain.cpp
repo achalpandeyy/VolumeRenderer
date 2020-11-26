@@ -38,109 +38,6 @@ bool show_file_browser = false;
 
 float sampling_rate = 2.f;
 
-// - File browser UI/Save Image UI
-// - Transfer function UI
-
-struct Application
-{
-    Application(Window* window)
-    {
-        // Initialize ImGui
-        IMGUI_CHECKVERSION();
-        ImGui::CreateContext();
-
-        ImGui::StyleColorsDark();
-
-        // Load OpenGL
-        // TODO: If write my OpenGL application with OpenGL version 4.6, would its .exe not run on machines
-        // having an OpenGL version lower than that??
-        if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
-        {
-            std::cout << "Failed to initialize GLAD" << std::endl;
-            exit(-1);
-        }
-
-        // TODO: Is it necessary to even set the glsl version??
-        ImGui_ImplGlfw_InitForOpenGL(window->handle, true);
-        ImGui_ImplOpenGL3_Init("#version 330");
-
-        // ImGui::GetStyle().ScrollbarSize = 1.f;
-
-        // Create ImGuiFileBrowser after initializing ImGui, obviously
-        file_browser = std::make_unique<ImGuiFileBrowser>();
-    }
-
-    ~Application()
-    {
-        ImGui_ImplOpenGL3_Shutdown();
-        ImGui_ImplGlfw_Shutdown();
-        ImGui::DestroyContext();
-    }
-
-    void BeginFrame()
-    {
-        ImGui_ImplOpenGL3_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();
-
-        // Note: You can remove imgui_demo.cpp from the project if you don't need this ImGui::ShowDemoWindow call, which you won't
-        // need eventually
-        if (show_demo_window)
-            ImGui::ShowDemoWindow(&show_demo_window);
-
-        // Set window rounding to 0
-        if (ImGui::BeginMainMenuBar())
-        {
-            if (ImGui::BeginMenu("File"))
-            {
-                // Todo: This Ctrl + O shortcut doesn't work! 
-                if (ImGui::MenuItem("Open", "CTRL + O"))
-                {
-                    file_browser->SetVisible(true);
-                }
-
-                ImGui::EndMenu();
-            }
-
-            if (ImGui::BeginMenu("Settings"))
-            {
-                show_settings_window = true;
-                ImGui::EndMenu();
-            }
-
-            if (ImGui::BeginMenu("About"))
-            {
-                show_about_window = true;
-                ImGui::EndMenu();
-            }
-
-            ImGui::EndMainMenuBar();
-        }
-
-        if (show_settings_window)
-        {
-            ImGui::Begin("Settings");
-            ImGui::Checkbox("Demo Window", &show_demo_window);
-            ImGui::SliderFloat("Sampling Rate", &sampling_rate, 1.f, 20.f);
-            ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
-            ImGui::End();
-        }
-
-        if (file_browser->IsVisible())
-        {
-            file_browser->Open();
-        }
-
-        ImGui::Render();
-    }
-
-    void EndFrame() const
-    {
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-    }
-
-    std::unique_ptr<ImGuiFileBrowser> file_browser = nullptr;
-};
 
 int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_line, INT show_code)
 {
@@ -148,7 +45,26 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
     int height = 720;
     Window window(width, height, "Volume Renderer");
 
-    Application application(&window);
+    // Initialize ImGui
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui::StyleColorsDark();
+
+    // Todo: If write my OpenGL application with OpenGL version 4.6, would its .exe not run on machines
+    // having an OpenGL version lower than that??
+    // Load OpenGL
+    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+    {
+        std::cout << "Failed to initialize GLAD" << std::endl;
+        exit(-1);
+    }
+
+    // TODO: Is it necessary to even set the glsl version??
+    ImGui_ImplGlfw_InitForOpenGL(window.handle, true);
+    ImGui_ImplOpenGL3_Init("#version 330");
+
+    // Create ImGuiFileBrowser after initializing ImGui, obviously
+    ImGuiFileBrowser file_browser;
    
     GLCall(glViewport(0, 0, width, height));
 
@@ -301,7 +217,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
     GLCall(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depth_rbo));
 
     {
-        // Check Framebuffer status here
+        // Check Framebuffer status
         GLCall(bool framebuffer_status = (glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE));
         if (framebuffer_status)
         {
@@ -315,7 +231,59 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
     {
         window.PollEvents();
 
-        application.BeginFrame();
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+        // Note: You can remove imgui_demo.cpp from the project if you don't need this ImGui::ShowDemoWindow call, which you won't
+        // need eventually
+        if (show_demo_window)
+            ImGui::ShowDemoWindow(&show_demo_window);
+
+        // Set window rounding to 0
+        if (ImGui::BeginMainMenuBar())
+        {
+            if (ImGui::BeginMenu("File"))
+            {
+                // Todo: This Ctrl + O shortcut doesn't work! 
+                if (ImGui::MenuItem("Open", "CTRL + O"))
+                {
+                    file_browser.SetVisible(true);
+                }
+
+                ImGui::EndMenu();
+            }
+
+            if (ImGui::BeginMenu("Settings"))
+            {
+                show_settings_window = true;
+                ImGui::EndMenu();
+            }
+
+            if (ImGui::BeginMenu("About"))
+            {
+                show_about_window = true;
+                ImGui::EndMenu();
+            }
+
+            ImGui::EndMainMenuBar();
+        }
+
+        if (show_settings_window)
+        {
+            ImGui::Begin("Settings");
+            ImGui::Checkbox("Demo Window", &show_demo_window);
+            ImGui::SliderFloat("Sampling Rate", &sampling_rate, 1.f, 20.f);
+            ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+            ImGui::End();
+        }
+
+        if (file_browser.IsVisible())
+        {
+            file_browser.Open();
+        }
+
+        ImGui::Render();
 
         // Generate Entry and Exit point textures
         GLCall(glBindFramebuffer(GL_FRAMEBUFFER, entry_exit_points_fbo));
@@ -373,10 +341,14 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
         
         GLCall(glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0));
 
-        application.EndFrame();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
         window.SwapBuffers();
     }
+
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
 
     return 0;
 }

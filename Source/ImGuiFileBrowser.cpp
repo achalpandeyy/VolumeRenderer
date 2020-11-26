@@ -3,6 +3,7 @@
 
 #include <imgui_internal.h>
 #include <filesystem>
+#include <sstream>
 #include <vector>
 
 std::vector<std::string> ParsePath(std::string path)
@@ -179,7 +180,13 @@ void ImGuiFileBrowser::ListFilesAndDirectories()
                     }
                     else
                     {
-                        // Todo: Open the damn volume
+                        const std::string& absolute_filepath = std::filesystem::absolute(filepath).string();
+                        // Start up a pop up which would ask the user for the following
+                        // - dimensions
+                        // - data type
+                        // - spacing
+                        // Somehow package this data and send it to the thing which would render the volume
+                        OutputDebugStringA(absolute_filepath.c_str());
                     }
                 }
             }
