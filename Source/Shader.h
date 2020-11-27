@@ -1,7 +1,5 @@
 #ifndef SHADER_H
 
-#include "Util.h"
-
 #include <string>
 #include <unordered_map>
 #include <glad/glad.h>
@@ -18,7 +16,7 @@ struct Shader
 
     inline void Bind() const
     {
-        GLCall(glUseProgram(id));
+        glUseProgram(id);
     }
 
 private:

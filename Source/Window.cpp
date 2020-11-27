@@ -2,6 +2,7 @@
 #include "Util.h"
 #include "Core/Win32.h"
 
+#include <glad/glad.h>
 #include <imgui.h>
 #include <iostream>
 #include <sstream>
@@ -15,6 +16,11 @@ Window::Window(int width, int height, const char* title)
     glfwSetErrorCallback(GLFWErrorCallback);
     if (!glfwInit())
         exit(-1);
+
+
+#ifdef _DEBUG
+    glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, true);
+#endif
 
     handle = glfwCreateWindow(width, height, title, NULL, NULL);
     if (!handle)
@@ -40,7 +46,7 @@ Window::~Window()
 
 void Window::FramebufferSizeCallback(GLFWwindow* window, int width, int height)
 {
-    GLCall(glViewport(0, 0, width, height));
+    glViewport(0, 0, width, height);
 }
 
 void Window::MouseCallback(GLFWwindow* window, double xpos, double ypos)

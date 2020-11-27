@@ -31,7 +31,8 @@ void Lerp(unsigned int x0, unsigned int x1, T* values)
         values[i] = m * (float)(i - x0) + y0;
 }
 
-bool show_demo_window = true;
+// Todo: Don't want my Setting window to be collapseable
+bool show_demo_window = false;
 bool show_settings_window = false;
 bool show_about_window = false;
 bool show_file_browser = false;
@@ -45,43 +46,101 @@ struct Volume
     std::string path;
 };
 
-int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_line, INT show_code)
+// Todo: It would be nice to use std::exception for this and all other exit(1)'s in the code
+#ifdef _DEBUG
+void WINAPI GLDebugOutput(GLenum source, GLenum type, unsigned int id, GLenum severity, GLsizei length,
+    const char* message, const void* user_param)
+{
+    std::ostringstream oss;
+    oss << "-----------------------" << std::endl;
+    oss << "Debug Message (" << id << "): " << message << std::endl;
+
+    switch (source)
+    {
+        case GL_DEBUG_SOURCE_API: oss << "Source: API"; break;
+        case GL_DEBUG_SOURCE_WINDOW_SYSTEM: oss << "Source: Window System"; break;
+        case GL_DEBUG_SOURCE_SHADER_COMPILER: oss << "Source: Shader Compiler"; break;
+        case GL_DEBUG_SOURCE_THIRD_PARTY: oss << "Source: Third Party"; break;
+        case GL_DEBUG_SOURCE_APPLICATION: oss << "Source: Application"; break;
+        case GL_DEBUG_SOURCE_OTHER: oss << "Source: Other"; break;
+    }
+    oss << std::endl;
+
+    switch (type)
+    {
+        case GL_DEBUG_TYPE_ERROR:               oss << "Type: Error"; break;
+        case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR: oss << "Type: Deprecated Behaviour"; break;
+        case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:  oss << "Type: Undefined Behaviour"; break;
+        case GL_DEBUG_TYPE_PORTABILITY:         oss << "Type: Portability"; break;
+        case GL_DEBUG_TYPE_PERFORMANCE:         oss << "Type: Performance"; break;
+        case GL_DEBUG_TYPE_MARKER:              oss << "Type: Marker"; break;
+        case GL_DEBUG_TYPE_PUSH_GROUP:          oss << "Type: Push Group"; break;
+        case GL_DEBUG_TYPE_POP_GROUP:           oss << "Type: Pop Group"; break;
+        case GL_DEBUG_TYPE_OTHER:               oss << "Type: Other"; break;
+    }
+    oss << std::endl;
+
+    switch (severity)
+    {
+        case GL_DEBUG_SEVERITY_HIGH:         oss << "Severity: high"; break;
+        case GL_DEBUG_SEVERITY_MEDIUM:       oss << "Severity: medium"; break;
+        case GL_DEBUG_SEVERITY_LOW:          oss << "Severity: low"; break;
+        case GL_DEBUG_SEVERITY_NOTIFICATION: oss << "Severity: notification"; break;
+    }
+    oss << std::endl;
+
+    oss << "----------------" << std::endl;
+
+    OutputDebugStringA(oss.str().c_str());
+
+    // Todo: Can you somehow get a line number from OpenGL?
+    __debugbreak();
+}
+#endif
+
+// Todo: Wish I had logging :(
+int WINAPI WinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev_instance, _In_ LPSTR cmd_line, _In_ int show_code)
 {
     int width = 1280;
     int height = 720;
     Window window(width, height, "Volume Renderer");
+
+    // Load OpenGL
+    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+    {
+        OutputDebugStringA("Failed to initialize GLAD\n");
+        exit(-1);
+    }
+
+#ifdef _DEBUG
+    int flags;
+    glGetIntegerv(GL_CONTEXT_FLAGS, &flags);
+    if (flags & GL_CONTEXT_FLAG_DEBUG_BIT)
+    {
+        OutputDebugStringA("Note: Debug context initialized.\n");
+
+        glEnable(GL_DEBUG_OUTPUT);
+        glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+        glDebugMessageCallback(GLDebugOutput, nullptr);
+        glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
+    }
+#endif
 
     // Initialize ImGui
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGui::StyleColorsDark();
 
-    // Todo: If write my OpenGL application with OpenGL version 4.6, would its .exe not run on machines
-    // having an OpenGL version lower than that??
-    // Load OpenGL
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
-    {
-        std::cout << "Failed to initialize GLAD" << std::endl;
-        exit(-1);
-    }
-
     ImGui_ImplGlfw_InitForOpenGL(window.handle, true);
     ImGui_ImplOpenGL3_Init();
 
     // Create ImGuiFileBrowser after initializing ImGui, obviously
     ImGuiFileBrowser file_browser;
-   
-    GLCall(glViewport(0, 0, width, height));
 
-    GLuint vol_texture;
-    GLCall(glGenTextures(1, &vol_texture));
+    // Get the details from ImGuiFileBrowswer and load the volume
 
-    GLCall(glBindTexture(GL_TEXTURE_3D, vol_texture));
-    GLCall(glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE));
-    GLCall(glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE));
-    GLCall(glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE));
-    GLCall(glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR));
-    GLCall(glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR));
+    // If the volume is loaded then render it otherwise just display and background color
+    // So initially, when the user hasn't selected any .RAW file to load just show the GUI over a default background color.
 
     Volume skull;
     skull.spacing = glm::vec3(1.f);
@@ -95,7 +154,21 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
     // glm::vec3 spacing(0.625f, 0.625f, 1.f);
     // glm::ivec3 volume_dims(512, 512, 463);
     // std::ifstream file("../Resources/prone_512x512x463_uint16.raw", std::ios::in | std::ios::binary | std::ios::ate);
+   
+    // Note: You should call glViewport here, GLFW's FramebufferSizeCallback doesn't get called without resizing the window first
+    glViewport(0, 0, width, height);
+
+    GLuint vol_texture;
+    glGenTextures(1, &vol_texture);
     
+    glBindTexture(GL_TEXTURE_3D, vol_texture);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+#if 1
     std::ifstream file(skull.path, std::ios::in | std::ios::binary | std::ios::ate);
     if (file.is_open())
     {
@@ -106,10 +179,10 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
         file.close();
 
         // Upload it to the GPU, assuming that input volume data inherently doesn't have any row alignment.
-        GLCall(glPixelStorei(GL_UNPACK_ALIGNMENT, 1));
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
-        GLCall(glTexImage3D(GL_TEXTURE_3D, 0, GL_R8, (GLsizei)skull.dimensions.x, (GLsizei)skull.dimensions.y, (GLsizei)skull.dimensions.z,
-            0, GL_RED, GL_UNSIGNED_BYTE, volume_data));
+        glTexImage3D(GL_TEXTURE_3D, 0, GL_R8, (GLsizei)skull.dimensions.x, (GLsizei)skull.dimensions.y, (GLsizei)skull.dimensions.z,
+            0, GL_RED, GL_UNSIGNED_BYTE, volume_data);
     }
     else
     {
@@ -117,7 +190,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
         exit(1);
     }
 
-    GLCall(glBindTexture(GL_TEXTURE_3D, 0));
+    glBindTexture(GL_TEXTURE_3D, 0);
 
     // Create a transfer function
     // TODO: This texel count makes too much total size on the stack, allocate this on heap
@@ -163,18 +236,18 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
 
     // Make it into a 1D texture
     GLuint transfer_function_texture;
-    GLCall(glGenTextures(1, &transfer_function_texture));
+    glGenTextures(1, &transfer_function_texture);
 
-    GLCall(glActiveTexture(GL_TEXTURE0 + 1));
-    GLCall(glBindTexture(GL_TEXTURE_1D, transfer_function_texture));
-    GLCall(glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE));
-    GLCall(glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_LINEAR));
-    GLCall(glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_LINEAR));
+    glActiveTexture(GL_TEXTURE0 + 1);
+    glBindTexture(GL_TEXTURE_1D, transfer_function_texture);
+    glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
     // Upload it to the GPU
-    GLCall(glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, transfer_function_texel_count, 0, GL_RGBA, GL_FLOAT, &transfer_function[0]));
+    glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, transfer_function_texel_count, 0, GL_RGBA, GL_FLOAT, &transfer_function[0]);
 
-    GLCall(glBindTexture(GL_TEXTURE_1D, 0));
+    glBindTexture(GL_TEXTURE_1D, 0);
 
     Mesh cube(GetUnitCubeVertices(), 3, GetUnitCubeIndices());
     Mesh quad(GetNDCQuadVertices(), 2, GetNDCQuadIndices());
@@ -207,32 +280,33 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
     Texture2D exit_points(width, height, GL_RGBA16, GL_RGBA, GL_UNSIGNED_SHORT);
 
     GLuint entry_exit_points_fbo;
-    GLCall(glGenFramebuffers(1, &entry_exit_points_fbo));
-    GLCall(glBindFramebuffer(GL_FRAMEBUFFER, entry_exit_points_fbo));
+    glGenFramebuffers(1, &entry_exit_points_fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, entry_exit_points_fbo);
 
     // Attach the attachements
     entry_points.Bind();
-    GLCall(glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, entry_points.id, 0));
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, entry_points.id, 0);
 
     exit_points.Bind();
-    GLCall(glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, exit_points.id, 0));
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, exit_points.id, 0);
 
     GLuint depth_rbo;
-    GLCall(glGenRenderbuffers(1, &depth_rbo));
-    GLCall(glBindRenderbuffer(GL_RENDERBUFFER, depth_rbo));
-    GLCall(glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, width, height));
-    GLCall(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depth_rbo));
+    glGenRenderbuffers(1, &depth_rbo);
+    glBindRenderbuffer(GL_RENDERBUFFER, depth_rbo);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, width, height);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depth_rbo);
 
     {
         // Check Framebuffer status
-        GLCall(bool framebuffer_status = (glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE));
+        bool framebuffer_status = (glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
         if (framebuffer_status)
         {
             OutputDebugStringA("NOTE: Framebuffer is complete!\n");
         }
     }
 
-    GLCall(glBindFramebuffer(GL_FRAMEBUFFER, 0));
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+#endif
 
     while (!window.ShouldClose())
     {
@@ -285,17 +359,15 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
             ImGui::End();
         }
 
-        if (file_browser.IsVisible())
-        {
-            file_browser.Open();
-        }
+        if (file_browser.IsVisible()) file_browser.Open();
 
         ImGui::Render();
 
+#if 1
         // Generate Entry and Exit point textures
-        GLCall(glBindFramebuffer(GL_FRAMEBUFFER, entry_exit_points_fbo));
-        GLCall(glEnable(GL_DEPTH_TEST));
-        GLCall(glClearColor(0.f, 0.f, 0.f, 1.f));
+        glBindFramebuffer(GL_FRAMEBUFFER, entry_exit_points_fbo);
+        glEnable(GL_DEPTH_TEST);
+        glClearColor(0.f, 0.f, 0.f, 1.f);
 
         entry_exit_shader.Bind();
         glm::mat4 pvm = camera.projection * camera.view * model;
@@ -304,23 +376,23 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
         cube.BindVAO();
 
         // Exit Points
-        GLCall(glDrawBuffer(GL_COLOR_ATTACHMENT1));
-        GLCall(glDepthFunc(GL_GREATER));
+        glDrawBuffer(GL_COLOR_ATTACHMENT1);
+        glDepthFunc(GL_GREATER);
 
         float old_depth;
-        GLCall(glGetFloatv(GL_DEPTH_CLEAR_VALUE, &old_depth));
-        GLCall(glClearDepth(0.f));
+        glGetFloatv(GL_DEPTH_CLEAR_VALUE, &old_depth);
+        glClearDepth(0.f);
 
-        GLCall(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
-        GLCall(glDrawElements(GL_TRIANGLE_STRIP, 14, GL_UNSIGNED_INT, 0));
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glDrawElements(GL_TRIANGLE_STRIP, 14, GL_UNSIGNED_INT, 0);
 
         // Entry Points
-        GLCall(glDrawBuffer(GL_COLOR_ATTACHMENT0));
-        GLCall(glDepthFunc(GL_LESS));
-        GLCall(glClearDepth(old_depth));
-        GLCall(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
+        glDrawBuffer(GL_COLOR_ATTACHMENT0);
+        glDepthFunc(GL_LESS);
+        glClearDepth(old_depth);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        GLCall(glDrawElements(GL_TRIANGLE_STRIP, 14, GL_UNSIGNED_INT, 0));
+        glDrawElements(GL_TRIANGLE_STRIP, 14, GL_UNSIGNED_INT, 0);
 
         // Second Pass
         shader.Bind();
@@ -329,24 +401,28 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
         shader.SetUniform1i("exit_points_sampler", 1);
         shader.SetUniform1f("sampling_rate", sampling_rate);
 
-        GLCall(glBindFramebuffer(GL_FRAMEBUFFER, 0));
-        GLCall(glClearColor(0.5f, 0.5f, 0.5f, 1.f));
-        GLCall(glDisable(GL_DEPTH_TEST));
-        GLCall(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glClearColor(0.5f, 0.5f, 0.5f, 1.f);
+        glDisable(GL_DEPTH_TEST);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         quad.BindVAO();
 
-        GLCall(glActiveTexture(GL_TEXTURE0));
-        GLCall(glBindTexture(GL_TEXTURE_2D, entry_points.id));
-        GLCall(glActiveTexture(GL_TEXTURE1));
-        GLCall(glBindTexture(GL_TEXTURE_2D, exit_points.id));
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, entry_points.id);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, exit_points.id);
 
-        GLCall(glActiveTexture(GL_TEXTURE2));
-        GLCall(glBindTexture(GL_TEXTURE_3D, vol_texture));
-        GLCall(glActiveTexture(GL_TEXTURE3));
-        GLCall(glBindTexture(GL_TEXTURE_1D, transfer_function_texture));
+        glActiveTexture(GL_TEXTURE2);
+        glBindTexture(GL_TEXTURE_3D, vol_texture);
+        glActiveTexture(GL_TEXTURE3);
+        glBindTexture(GL_TEXTURE_1D, transfer_function_texture);
         
-        GLCall(glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0));
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+#endif
+
+        // glClearColor(0.1f, 0.1f, 0.1f, 1.f);
+        // glClear(GL_COLOR_BUFFER_BIT);
 
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 

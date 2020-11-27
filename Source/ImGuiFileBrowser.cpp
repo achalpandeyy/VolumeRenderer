@@ -80,7 +80,7 @@ void ImGuiFileBrowser::Open()
                 ImGui::SetCursorPosX((ImGui::GetWindowContentRegionWidth() / 2.f) - 78.f);
                 if (ImGui::Button("Open", ImVec2(72, 27)))
                 {
-
+                    // Send the data over to something responsible for loading the volume data
                 }
 
                 ImGui::SameLine(0.f);
