@@ -29,6 +29,7 @@ private:
 
     bool visible = false;
     bool show_hidden_items = false;
+    bool show_details_popup = false;
     std::string current_dir = "../";
     ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_OpenOnDoubleClick
         | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_NoTreePushOnOpen;

@@ -38,6 +38,12 @@ bool show_file_browser = false;
 
 float sampling_rate = 2.f;
 
+struct Volume
+{
+    glm::vec3 spacing;
+    glm::ivec3 dimensions;
+    std::string path;
+};
 
 int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_line, INT show_code)
 {
@@ -59,9 +65,8 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
         exit(-1);
     }
 
-    // TODO: Is it necessary to even set the glsl version??
     ImGui_ImplGlfw_InitForOpenGL(window.handle, true);
-    ImGui_ImplOpenGL3_Init("#version 330");
+    ImGui_ImplOpenGL3_Init();
 
     // Create ImGuiFileBrowser after initializing ImGui, obviously
     ImGuiFileBrowser file_browser;
@@ -78,9 +83,10 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
     GLCall(glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR));
     GLCall(glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR));
 
-    glm::vec3 spacing(1.f);
-    glm::ivec3 volume_dims(256, 256, 256);
-    std::ifstream file("../Resources/skull_256x256x256_uint8.raw", std::ios::in | std::ios::binary | std::ios::ate);
+    Volume skull;
+    skull.spacing = glm::vec3(1.f);
+    skull.dimensions = glm::ivec3(256);
+    skull.path = "../Resources/skull_256x256x256_uint8.raw";
 
     // glm::vec3 spacing(1.f, 1.f, 4.f);
     // glm::ivec3 volume_dims(341, 341, 93);
@@ -90,6 +96,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
     // glm::ivec3 volume_dims(512, 512, 463);
     // std::ifstream file("../Resources/prone_512x512x463_uint16.raw", std::ios::in | std::ios::binary | std::ios::ate);
     
+    std::ifstream file(skull.path, std::ios::in | std::ios::binary | std::ios::ate);
     if (file.is_open())
     {
         std::streampos pos = file.tellg();
@@ -101,7 +108,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
         // Upload it to the GPU, assuming that input volume data inherently doesn't have any row alignment.
         GLCall(glPixelStorei(GL_UNPACK_ALIGNMENT, 1));
 
-        GLCall(glTexImage3D(GL_TEXTURE_3D, 0, GL_R8, (GLsizei)volume_dims.x, (GLsizei)volume_dims.y, (GLsizei)volume_dims.z,
+        GLCall(glTexImage3D(GL_TEXTURE_3D, 0, GL_R8, (GLsizei)skull.dimensions.x, (GLsizei)skull.dimensions.y, (GLsizei)skull.dimensions.z,
             0, GL_RED, GL_UNSIGNED_BYTE, volume_data));
     }
     else
@@ -173,11 +180,11 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
     Mesh quad(GetNDCQuadVertices(), 2, GetNDCQuadIndices());
 
     // Construct Model Matrix (brings to World Space from Model Space)
-    spacing *= 0.01f;
+    skull.spacing *= 0.01f;
     glm::mat3 basis;
-    basis[0] = { volume_dims.x * spacing.x, 0.f, 0.f };
-    basis[1] = { 0.f, volume_dims.y * spacing.y, 0.f };
-    basis[2] = { 0.f, 0.f, volume_dims.z * spacing.z };
+    basis[0] = { skull.dimensions.x * skull.spacing.x, 0.f, 0.f };
+    basis[1] = { 0.f, skull.dimensions.y * skull.spacing.y, 0.f };
+    basis[2] = { 0.f, 0.f, skull.dimensions.z * skull.spacing.z };
 
     glm::vec3 offset = -0.5f * (basis[0] + basis[1] + basis[2]);
 
@@ -190,7 +197,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
     Shader shader("../Source/Shaders/Shader.vs", "../Source/Shaders/Shader.fs");
 
     shader.Bind();
-    shader.SetUniform3i("volume_dims", volume_dims.x, volume_dims.y, volume_dims.z);
+    shader.SetUniform3i("volume_dims", skull.dimensions.x, skull.dimensions.y, skull.dimensions.z);
     shader.SetUniform1i("volume", 2);
     shader.SetUniform1i("transfer_function", 3);
 
@@ -240,7 +247,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, PSTR command_lin
         if (show_demo_window)
             ImGui::ShowDemoWindow(&show_demo_window);
 
-        // Set window rounding to 0
+        ImGui::GetStyle().WindowRounding = 0.f;
         if (ImGui::BeginMainMenuBar())
         {
             if (ImGui::BeginMenu("File"))

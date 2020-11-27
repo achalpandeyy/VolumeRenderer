@@ -40,14 +40,60 @@ void ImGuiFileBrowser::Open()
 
     // Set file browser's dimensions
     ImVec2 file_browser_dimensions = { 0.5f * ImGui::GetIO().DisplaySize.x, 0.5f * ImGui::GetIO().DisplaySize.y };
-    ImGui::SetNextWindowSizeConstraints(file_browser_dimensions, file_browser_dimensions);
+    ImGui::SetNextWindowSize(file_browser_dimensions);
+
+    // Todo: Seems like I need to maintain state which specifies on which file the user is currently present
 
     ImGui::OpenPopup("File Browser");
-    if (ImGui::BeginPopupModal("File Browser", 0, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize))
+    if (ImGui::BeginPopupModal("File Browser", 0, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove))
     {
         DrawFileTab();
         DrawFileList();
         DrawButtonGroup();
+
+        if (show_details_popup)
+        {
+            ImVec2 center(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f);
+            ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+            ImGui::SetNextWindowSize(ImVec2(370, 180));
+
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12, 8));
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 12));
+
+            ImGui::OpenPopup("File Details");
+            if (ImGui::BeginPopupModal("File Details", &show_details_popup, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove))
+            {
+                const char* datatype = "uint8";
+                int dimensions[3] = { 256, 256, 256 };
+                float spacing[3] = { 0.1f, 0.1f, 0.1f };
+
+                ImGui::TextWrapped("Loading <file-name>..\n"
+                "Please provide following details for the dataset.");
+
+                std::vector<const char*> datatypes = { "unsigned int 8 bit", "unsigned int 16 bit" };
+                static int item_current = 0;
+
+                ImGui::Combo("Data Type", &item_current, datatypes.data(), datatypes.size());
+                ImGui::InputInt3("Dimensions", dimensions);
+                ImGui::InputFloat3("Spacing", spacing);
+
+                ImGui::SetCursorPosX((ImGui::GetWindowContentRegionWidth() / 2.f) - 78.f);
+                if (ImGui::Button("Open", ImVec2(72, 27)))
+                {
+
+                }
+
+                ImGui::SameLine(0.f);
+                ImGui::SetCursorPosX((ImGui::GetWindowContentRegionWidth() / 2.f) + 6.f);
+                if (ImGui::Button("Cancel", ImVec2(72, 27)))
+                {
+                    show_details_popup = false;
+                }
+
+                ImGui::PopStyleVar(2);
+                ImGui::EndPopup();
+            }
+        }
 
         ImGui::EndPopup();
     }
@@ -119,7 +165,9 @@ void ImGuiFileBrowser::DrawFileList()
     const float file_browser_height = 0.5f * ImGui::GetIO().DisplaySize.y;
     const float file_list_height = 0.72f * file_browser_height;
     ImGui::BeginChild("FileList", ImVec2(0, file_list_height), true);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 8));
     current_dir.empty() ? ListLogicalDrives() : ListFilesAndDirectories();
+    ImGui::PopStyleVar();
     ImGui::EndChild();
 }
 
@@ -180,13 +228,8 @@ void ImGuiFileBrowser::ListFilesAndDirectories()
                     }
                     else
                     {
+                        show_details_popup = true;
                         const std::string& absolute_filepath = std::filesystem::absolute(filepath).string();
-                        // Start up a pop up which would ask the user for the following
-                        // - dimensions
-                        // - data type
-                        // - spacing
-                        // Somehow package this data and send it to the thing which would render the volume
-                        OutputDebugStringA(absolute_filepath.c_str());
                     }
                 }
             }
