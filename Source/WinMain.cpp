@@ -6,6 +6,7 @@
 #include "Mesh.h"
 #include "Window.h"
 #include "ImGuiFileBrowser.h"
+#include "Volume.h"
 
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
@@ -38,13 +39,6 @@ bool show_about_window = false;
 bool show_file_browser = false;
 
 float sampling_rate = 2.f;
-
-struct Volume
-{
-    glm::vec3 spacing;
-    glm::ivec3 dimensions;
-    std::string path;
-};
 
 // Todo: It would be nice to use std::exception for this and all other exit(1)'s in the code
 #ifdef _DEBUG
@@ -142,56 +136,15 @@ int WINAPI WinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev_instance, _I
     // If the volume is loaded then render it otherwise just display and background color
     // So initially, when the user hasn't selected any .RAW file to load just show the GUI over a default background color.
 
-    Volume skull;
-    skull.spacing = glm::vec3(1.f);
-    skull.dimensions = glm::ivec3(256);
-    skull.path = "../Resources/skull_256x256x256_uint8.raw";
-
-    // glm::vec3 spacing(1.f, 1.f, 4.f);
-    // glm::ivec3 volume_dims(341, 341, 93);
-    // std::ifstream file("../Resources/statue_leg_341x341x93_uint8.raw", std::ios::in | std::ios::binary | std::ios::ate);
-
-    // glm::vec3 spacing(0.625f, 0.625f, 1.f);
-    // glm::ivec3 volume_dims(512, 512, 463);
-    // std::ifstream file("../Resources/prone_512x512x463_uint16.raw", std::ios::in | std::ios::binary | std::ios::ate);
+    Volume vol("../Resources/skull_256x256x256_uint8.raw", glm::ivec3(256), glm::vec3(1.f));
+    // Volume vol("../Resources/statue_leg_341x341x93_uint8.raw", glm::ivec3(341, 341, 93), glm::vec3(1.f, 1.f, 4.f));
+    // Volume vol("../Resources/prone_512x512x463_uint16.raw", glm::ivec3(512, 512, 463), glm::vec3(0.625f, 0.625f, 1.f));
    
     // Note: You should call glViewport here, GLFW's FramebufferSizeCallback doesn't get called without resizing the window first
     glViewport(0, 0, width, height);
 
-    GLuint vol_texture;
-    glGenTextures(1, &vol_texture);
-    
-    glBindTexture(GL_TEXTURE_3D, vol_texture);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
 #if 1
-    std::ifstream file(skull.path, std::ios::in | std::ios::binary | std::ios::ate);
-    if (file.is_open())
-    {
-        std::streampos pos = file.tellg();
-        char* volume_data = new char[pos]; // position of the last character == size of the file
-        file.seekg(0, std::ios::beg);
-        file.read(volume_data, pos);
-        file.close();
-
-        // Upload it to the GPU, assuming that input volume data inherently doesn't have any row alignment.
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-
-        glTexImage3D(GL_TEXTURE_3D, 0, GL_R8, (GLsizei)skull.dimensions.x, (GLsizei)skull.dimensions.y, (GLsizei)skull.dimensions.z,
-            0, GL_RED, GL_UNSIGNED_BYTE, volume_data);
-    }
-    else
-    {
-        OutputDebugStringA("Unable to open file!\n");
-        exit(1);
-    }
-
-    glBindTexture(GL_TEXTURE_3D, 0);
-
+    
     // Create a transfer function
     // TODO: This texel count makes too much total size on the stack, allocate this on heap
     const size_t transfer_function_texel_count = 1024;
@@ -253,11 +206,10 @@ int WINAPI WinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev_instance, _I
     Mesh quad(GetNDCQuadVertices(), 2, GetNDCQuadIndices());
 
     // Construct Model Matrix (brings to World Space from Model Space)
-    skull.spacing *= 0.01f;
     glm::mat3 basis;
-    basis[0] = { skull.dimensions.x * skull.spacing.x, 0.f, 0.f };
-    basis[1] = { 0.f, skull.dimensions.y * skull.spacing.y, 0.f };
-    basis[2] = { 0.f, 0.f, skull.dimensions.z * skull.spacing.z };
+    basis[0] = { vol.dimensions.x * vol.spacing.x * 0.01f, 0.f, 0.f };
+    basis[1] = { 0.f, vol.dimensions.y * vol.spacing.y * 0.01f, 0.f };
+    basis[2] = { 0.f, 0.f, vol.dimensions.z * vol.spacing.z * 0.01f };
 
     glm::vec3 offset = -0.5f * (basis[0] + basis[1] + basis[2]);
 
@@ -270,7 +222,7 @@ int WINAPI WinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev_instance, _I
     Shader shader("../Source/Shaders/Shader.vs", "../Source/Shaders/Shader.fs");
 
     shader.Bind();
-    shader.SetUniform3i("volume_dims", skull.dimensions.x, skull.dimensions.y, skull.dimensions.z);
+    shader.SetUniform3i("volume_dims", vol.dimensions.x, vol.dimensions.y, vol.dimensions.z);
     shader.SetUniform1i("volume", 2);
     shader.SetUniform1i("transfer_function", 3);
 
@@ -308,6 +260,8 @@ int WINAPI WinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev_instance, _I
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 #endif
 
+    glm::vec4 default_bg(0.5f, 0.5f, 0.5f, 1.f);
+
     while (!window.ShouldClose())
     {
         window.PollEvents();
@@ -318,8 +272,7 @@ int WINAPI WinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev_instance, _I
 
         // Note: You can remove imgui_demo.cpp from the project if you don't need this ImGui::ShowDemoWindow call, which you won't
         // need eventually
-        if (show_demo_window)
-            ImGui::ShowDemoWindow(&show_demo_window);
+        if (show_demo_window) ImGui::ShowDemoWindow(&show_demo_window);
 
         ImGui::GetStyle().WindowRounding = 0.f;
         if (ImGui::BeginMainMenuBar())
@@ -414,14 +367,14 @@ int WINAPI WinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev_instance, _I
         glBindTexture(GL_TEXTURE_2D, exit_points.id);
 
         glActiveTexture(GL_TEXTURE2);
-        glBindTexture(GL_TEXTURE_3D, vol_texture);
+        glBindTexture(GL_TEXTURE_3D, vol.texture->id);
         glActiveTexture(GL_TEXTURE3);
         glBindTexture(GL_TEXTURE_1D, transfer_function_texture);
         
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 #endif
 
-        // glClearColor(0.1f, 0.1f, 0.1f, 1.f);
+        // glClearColor(default_bg.x, default_bg.y, default_bg.z, default_bg.a);
         // glClear(GL_COLOR_BUFFER_BIT);
 
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
