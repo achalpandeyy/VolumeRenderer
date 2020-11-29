@@ -34,6 +34,7 @@ vec4 RayTraversal(vec3 entry_point, vec3 exit_point)
         // val ranges from 0 to 1
         float val = texture(volume, sample_pos).r;
         vec4 val_color = texture(transfer_function, val);
+        // vec4 val_color = vec4(val);
 
         // Opacity correction
         val_color.a = 1.0 - pow(1.0 - val_color.a, dt * REF_SAMPLING_INTERVAL);

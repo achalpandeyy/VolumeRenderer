@@ -31,6 +31,11 @@
 *       information about the error just occured
 *   
 *   ->  Logging to either VS Output window or a debug console powered by ImGui
+* 
+*   ->  Currently I can load only uint8 and uint16, add support for more
+* 
+*   ->  Loading of volume datasets aren't fool-proof, someone could easily mess the loading their data and get run-time
+*       error, maybe handle that case and show an error dialog
 */
 
 // Todo: Don't want my Setting window to be collapseable
@@ -156,18 +161,23 @@ ImVec4 GetListItemTextColor(bool is_directory, bool is_hidden)
 }
 
 // Todo: Why not use unsigned char for "data"?
-GLuint ReadVolumeRAW(const char* path, const glm::ivec3& dimensions, const glm::vec3& spacing, char* data)
+GLuint ReadVolumeRAW(const char* path, const glm::ivec3& dimensions, const glm::vec3& spacing, unsigned int byte_count, char* data)
 {
     // Read in the volume data
     std::ifstream file(path, std::ios::in | std::ios::binary | std::ios::ate);
     if (file.is_open())
     {
-        // Note: Position of the last character == size of the file
-        std::streampos pos = file.tellg();
-        data = new char[pos];
-        file.seekg(0, std::ios::beg);
-        file.read(data, pos);
+        // Get size of the file
+        file.seekg(0, file.end);
+        size_t size = file.tellg();
+        file.seekg(0, file.beg);
+
+        data = new char[size];
+        file.read(data, size);
+
         file.close();
+
+        assert(size == (size_t)dimensions.x * dimensions.y * dimensions.z * byte_count);
 
         // Upload to the GPU
         GLuint volume_texture;
@@ -183,7 +193,10 @@ GLuint ReadVolumeRAW(const char* path, const glm::ivec3& dimensions, const glm::
         // Upload it to the GPU, assuming that input volume data inherently doesn't have any row alignment
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
-        glTexImage3D(GL_TEXTURE_3D, 0, GL_R8, dimensions.x, dimensions.y, dimensions.z, 0, GL_RED, GL_UNSIGNED_BYTE, data);
+        if (byte_count == 1)
+            glTexImage3D(GL_TEXTURE_3D, 0, GL_R8, dimensions.x, dimensions.y, dimensions.z, 0, GL_RED, GL_UNSIGNED_BYTE, data);
+        else
+            glTexImage3D(GL_TEXTURE_3D, 0, GL_R16, dimensions.x, dimensions.y, dimensions.z, 0, GL_RED, GL_UNSIGNED_SHORT, data);
 
         glBindTexture(GL_TEXTURE_3D, 0);
 
@@ -255,23 +268,22 @@ int WINAPI WinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev_instance, _I
     ImGui_ImplGlfw_InitForOpenGL(window.handle, true);
     ImGui_ImplOpenGL3_Init();
 
-    // Todo: Is it a memory leak if I first load up a volume dataset pointed to by "volume_data" then without first deleting it
-    // I allocate another one pointed to by the same pointer i.e. "volume_data" ?
     bool new_volume = false;
+
     std::string volume_path = "../Resources/skull_256x256x256_uint8.raw";
     glm::ivec3 volume_dimensions(256);
     glm::vec3 volume_spacing(1.f);
+    unsigned int volume_byte_count = 1u;
     char* volume_data = nullptr;
 
-    GLuint volume_texture = ReadVolumeRAW(volume_path.c_str(), volume_dimensions, volume_spacing, volume_data);
+    GLuint volume_texture = ReadVolumeRAW(volume_path.c_str(), volume_dimensions, volume_spacing, volume_byte_count, volume_data);
 
     glm::mat4 model = GetModelMatrix(volume_dimensions, volume_spacing);
     
     // Note: You should call glViewport here, GLFW's FramebufferSizeCallback doesn't get called without resizing the window first
     glViewport(0, 0, width, height);
 
-#if 1
-    
+#if 1    
     // Create a transfer function
     // TODO: This texel count makes too much total size on the stack, allocate this on heap
     const size_t transfer_function_texel_count = 1024;
@@ -628,6 +640,8 @@ int WINAPI WinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev_instance, _I
                         ImGui::InputInt3("Dimensions", &volume_dimensions[0]);
                         ImGui::InputFloat3("Spacing", &volume_spacing[0]);
 
+                        volume_byte_count = item_current + 1;
+
                         ImGui::SetCursorPosX((ImGui::GetWindowContentRegionWidth() / 2.f) - 78.f);
                         if (ImGui::Button("Open", ImVec2(72, 27)))
                         {
@@ -663,7 +677,7 @@ int WINAPI WinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev_instance, _I
         {
             glDeleteTextures(1, &volume_texture);
 
-            volume_texture = ReadVolumeRAW(volume_path.c_str(), volume_dimensions, volume_spacing, volume_data);
+            volume_texture = ReadVolumeRAW(volume_path.c_str(), volume_dimensions, volume_spacing, volume_byte_count, volume_data);
             model = GetModelMatrix(volume_dimensions, volume_spacing);
 
             new_volume = false;
