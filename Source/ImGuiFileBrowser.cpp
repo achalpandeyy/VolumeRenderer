@@ -6,31 +6,6 @@
 #include <sstream>
 #include <vector>
 
-std::vector<std::string> ParsePath(std::string path)
-{
-    // Add a trailing slash
-    if (path.back() != '\\')
-        path += "\\";
-
-    std::vector<std::string> result;
-    std::size_t prev_pos = 0;
-    std::size_t pos = path.find("\\", prev_pos);
-
-    while (pos != std::string::npos)
-    {
-        result.push_back(path.substr(prev_pos, pos - prev_pos));
-        prev_pos = pos + 1;
-        pos = path.find("\\", prev_pos);
-    }
-    return result;
-}
-
-void DrawFakeArrowButton()
-{
-    ImGui::SameLine(0.f, 0.f);
-    float frame_height = ImGui::GetFrameHeight();
-    ImGui::ArrowButtonEx("FakeButton", ImGuiDir_Right, ImVec2(frame_height, frame_height), ImGuiButtonFlags_Disabled);
-}
 
 void ImGuiFileBrowser::Open()
 {
@@ -137,10 +112,10 @@ void ImGuiFileBrowser::DrawFileTab()
 
     if (!absolute_filepath.empty())
     {
-        std::vector<std::string> directories = ParsePath(absolute_filepath);
+        std::vector<std::string> directories; // = ParsePath(absolute_filepath);
         for (size_t i = 0; i < directories.size(); ++i)
         {
-            DrawFakeArrowButton();
+            // DrawFakeArrowButton();
 
             ImGui::SameLine(0.f, 0.f);
             if (ImGui::Button(directories[i].c_str()))
