@@ -7,6 +7,7 @@
 #include "Window.h"
 #include "Volume.h"
 
+#include <stb_image/stb_image_write.h>
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <imgui_impl_glfw.h>
@@ -34,8 +35,10 @@
 * 
 *   ->  Currently I can load only uint8 and uint16, add support for more
 * 
-*   ->  Loading of volume datasets aren't fool-proof, someone could easily mess the loading their data and get run-time
+*   ->  Loading of volume datasets aren't fool-proof, someone could easily mess up loading their data and get run-time
 *       error, maybe handle that case and show an error dialog
+* 
+*   ->  I think we no longer need stb_image.h because we're no longer loading images
 */
 
 // Todo: Don't want my Setting window to be collapseable
@@ -395,6 +398,8 @@ int WINAPI WinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev_instance, _I
     ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_OpenOnDoubleClick
         | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_NoTreePushOnOpen;
 
+    bool save_as_png = false;
+
     while (!window.ShouldClose())
     {
         window.PollEvents();
@@ -440,6 +445,12 @@ int WINAPI WinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev_instance, _I
         {
             ImGui::Begin("Settings");
             ImGui::Checkbox("Demo Window", &show_demo_window);
+            
+            if (ImGui::Button("Save as PNG"))
+            {
+                save_as_png = true;
+            }
+
             ImGui::SliderFloat("Sampling Rate", &sampling_rate, 1.f, 20.f);
             ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
             ImGui::End();
@@ -549,7 +560,6 @@ int WINAPI WinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev_instance, _I
                 else
                 {
                     ImGui::Unindent(ImGui::GetTreeNodeToLabelSpacing());
-
                     for (const auto& entry : std::filesystem::directory_iterator(current_dir))
                     {
                         const std::filesystem::path& filepath = entry.path();
@@ -564,6 +574,7 @@ int WINAPI WinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev_instance, _I
 
                             ImVec4 text_color = GetListItemTextColor(entry.is_directory(), is_item_hidden);
                             ImGui::PushStyleColor(ImGuiCol_Text, text_color);
+
                             if (ImGui::TreeNodeEx(path.c_str(), flags))
                             {
                                 if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && ImGui::IsItemHovered(ImGuiHoveredFlags_None))
@@ -598,17 +609,8 @@ int WINAPI WinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev_instance, _I
                 ImGui::SameLine();
                 ImGui::SetCursorPosX(open_file_dialog_width - 2.25f * button_size.x);
 
-                // Todo: For this "Open" button to work I think we need some notion or some way to keep track of
-                // which file is currently selected by the user
-
-                // Open Button
-                if (ImGui::Button("Open", button_size))
-                {
-
-                }
-
                 // Cancel Button
-                ImGui::SameLine();
+                ImGui::SameLine(550.f);
                 if (ImGui::Button("Cancel", button_size))
                 {
                     show_open_file_dialog = false;
@@ -740,8 +742,31 @@ int WINAPI WinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev_instance, _I
         
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 #endif
+        if (save_as_png)
+        {
+            unsigned char* pixels = (unsigned char*)malloc(1280 * 720 * 3);
+            glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+
+            stbi_flip_vertically_on_write(1);
+            stbi_write_png("image.png", width, height, 3, pixels, width * 3);
+            free(pixels);
+
+#ifdef _DEBUG
+            // Check the default framebuffer data type because it will affect PNG writing
+            GLint value = 0;
+
+            glGetFramebufferParameteriv(GL_FRAMEBUFFER, GL_IMPLEMENTATION_COLOR_READ_FORMAT, &value);
+            assert(value == GL_RGBA);
+
+            glGetFramebufferParameteriv(GL_FRAMEBUFFER, GL_IMPLEMENTATION_COLOR_READ_TYPE, &value);
+            assert(value == GL_UNSIGNED_BYTE);
+
+#endif
+            save_as_png = false;
+        }
 
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
 
         window.SwapBuffers();
     }
