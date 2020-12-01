@@ -47,6 +47,13 @@ bool show_settings_window = false;
 bool show_about_window = false;
 bool show_file_browser = false;
 
+std::string current_dir = "../";
+ImGuiTreeNodeFlags file_list_flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_OpenOnDoubleClick
+    | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+bool show_hidden_items = false;
+bool show_file_details_dialog = false;
+std::string volume_path = "../Resources/skull_256x256x256_uint8.raw";
+
 float sampling_rate = 2.f;
 
 template <typename T>
@@ -234,6 +241,151 @@ glm::mat4 GetModelMatrix(const glm::ivec3& dimensions, const glm::vec3& spacing)
     return model;
 }
 
+ImVec2 PlaceFileBrowserWindow()
+{
+    // Set position at center
+    ImVec2 center(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f);
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    // Set dimensions
+    ImVec2 dimensions = { 0.5f * ImGui::GetIO().DisplaySize.x, 0.5f * ImGui::GetIO().DisplaySize.y };
+    ImGui::SetNextWindowSize(dimensions);
+
+    return dimensions;
+}
+
+void DrawFileTab(float height)
+{
+    // Set up style
+    ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 2.f);
+
+    ImGui::BeginChild("FileTab", ImVec2(0, height), true, ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+    const std::string& absolute_filepath = std::filesystem::absolute(current_dir).string();
+
+    if (ImGui::ArrowButton("UpButton", ImGuiDir_Up))
+    {
+        // Note: You cannot go up a directory if you're already in the root directory of a logical
+        // drive. From there just empty out the current directory and start building it again once
+        // the user selects the logical drive.
+        bool cannot_go_up = absolute_filepath.empty() || absolute_filepath.length() == 3;
+        if (cannot_go_up)
+        {
+            current_dir = "";
+        }
+        else
+        {
+            current_dir += "/..";
+        }
+    }
+
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 1.0f, 1.0f, 0.f));
+
+    ImGui::SameLine();
+    if (ImGui::Button("Computer")) current_dir = "";
+
+    if (current_dir.length() != 0)
+    {
+        // Note: Since I'm not updating absolute_filepath every time current_dir changes, it lags behind
+        // by 1 frame which only becomes noticeable when the app is running at a very slow frame rate, for
+        // example, when the sampling rate is very high.
+        std::vector<std::string> directories = ParsePath(absolute_filepath);
+        for (size_t i = 0; i < directories.size(); ++i)
+        {
+            DrawFakeArrowButton();
+
+            ImGui::SameLine(0.f, 0.f);
+            if (ImGui::Button(directories[i].c_str()))
+            {
+                current_dir = "";
+                for (size_t k = 0; k <= i; ++k)
+                {
+                    current_dir += directories[k];
+                    current_dir += "\\";
+                }
+            }
+        }
+    }
+
+    ImGui::PopStyleColor();
+
+    ImGui::PopStyleVar();
+
+    ImGui::EndChild();
+}
+
+void DrawFileList(float height)
+{
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 8));
+
+    ImGui::BeginChild("FileList", ImVec2(0, height), true);
+
+    // Todo: You need to disable the save button and/or text input so the user is unable to save
+    // the file when they are at "Computer"
+    ImGui::Unindent(ImGui::GetTreeNodeToLabelSpacing());
+    if (current_dir.empty())
+    {
+        // Todo: Visually separate Removable drives
+        char buffer[64];
+        DWORD length = GetLogicalDriveStringsA(64, buffer);
+
+        for (unsigned long i = 0; i < length; ++i)
+        {
+            bool is_drive_name = buffer[i] != ':' && buffer[i] != '\\' && buffer[i] != '\0';
+            if (is_drive_name)
+            {
+                if (ImGui::TreeNodeEx(&buffer[i], file_list_flags))
+                {
+                    if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && ImGui::IsItemHovered(ImGuiHoveredFlags_None))
+                    {
+                        current_dir += buffer[i];
+                        current_dir += ":/";
+                    }
+                }
+            }
+        }
+    }
+    else
+    {
+        for (const auto& entry : std::filesystem::directory_iterator(current_dir))
+        {
+            const std::filesystem::path& filepath = entry.path();
+            std::string extension = filepath.extension().string();
+
+            bool is_item_hidden = FILE_ATTRIBUTE_HIDDEN & GetFileAttributesW(filepath.wstring().c_str());
+            bool is_item_displayable = (!is_item_hidden || (is_item_hidden && show_hidden_items))
+                && (entry.is_directory() || extension == ".raw" || extension == ".pvm");
+            if (is_item_displayable)
+            {
+                const std::string& path = filepath.filename().string();
+
+                ImVec4 text_color = GetListItemTextColor(entry.is_directory(), is_item_hidden);
+                ImGui::PushStyleColor(ImGuiCol_Text, text_color);
+
+                if (ImGui::TreeNodeEx(path.c_str(), file_list_flags))
+                {
+                    if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && ImGui::IsItemHovered(ImGuiHoveredFlags_None))
+                    {
+                        if (entry.is_directory())
+                        {
+                            current_dir.append("/" + path);
+                        }
+                        else
+                        {
+                            show_file_details_dialog = true;
+                            volume_path = std::filesystem::absolute(filepath).string();
+                        }
+                    }
+                }
+                ImGui::PopStyleColor();
+            }
+        }
+    }
+
+    ImGui::PopStyleVar();
+    ImGui::EndChild();
+}
+
 int WINAPI WinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev_instance, _In_ LPSTR cmd_line, _In_ int show_code)
 {
     int width = 1280;
@@ -273,7 +425,7 @@ int WINAPI WinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev_instance, _I
 
     bool new_volume = false;
 
-    std::string volume_path = "../Resources/skull_256x256x256_uint8.raw";
+    // Note: volume_path is temporarily global
     glm::ivec3 volume_dimensions(256);
     glm::vec3 volume_spacing(1.f);
     unsigned int volume_byte_count = 1u;
@@ -286,7 +438,6 @@ int WINAPI WinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev_instance, _I
     // Note: You should call glViewport here, GLFW's FramebufferSizeCallback doesn't get called without resizing the window first
     glViewport(0, 0, width, height);
 
-#if 1    
     // Create a transfer function
     // TODO: This texel count makes too much total size on the stack, allocate this on heap
     const size_t transfer_function_texel_count = 1024;
@@ -387,18 +538,14 @@ int WINAPI WinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev_instance, _I
     }
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-#endif
 
     glm::vec4 default_bg(0.5f, 0.5f, 0.5f, 1.f);
 
     bool show_open_file_dialog = false;
-    bool show_hidden_items = false;
-    bool show_file_details_dialog = false;
-    std::string current_dir = "../";
-    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_OpenOnDoubleClick
-        | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+    bool show_save_file_dialog = false;
 
     bool save_as_png = false;
+    std::string path_to_save_at = "";
 
     while (!window.ShouldClose())
     {
@@ -417,10 +564,14 @@ int WINAPI WinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev_instance, _I
         {
             if (ImGui::BeginMenu("File"))
             {
-                // Todo: This Ctrl + O shortcut doesn't work! 
-                if (ImGui::MenuItem("Open", "CTRL + O"))
+                if (ImGui::MenuItem("Open"))
                 {
                     show_open_file_dialog = true;
+                }
+
+                if (ImGui::MenuItem("Save As"))
+                {
+                    show_save_file_dialog = true;
                 }
 
                 ImGui::EndMenu();
@@ -458,156 +609,24 @@ int WINAPI WinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev_instance, _I
 
         if (show_open_file_dialog)
         {
-            // Set the Open File Dialog to appear at the center
-            ImVec2 center(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f);
-            ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-
-            // Set Open File Dialog's dimensions
-            ImVec2 open_file_dialog_dimensions = { 0.5f * ImGui::GetIO().DisplaySize.x, 0.5f * ImGui::GetIO().DisplaySize.y };
-            ImGui::SetNextWindowSize(open_file_dialog_dimensions);
+            ImVec2 file_browser_dimensions = PlaceFileBrowserWindow();
 
             ImGui::OpenPopup("OpenFileDialog");
             if (ImGui::BeginPopupModal("OpenFileDialog", 0, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove))
             {
-                std::string absolute_filepath = std::filesystem::absolute(current_dir).string();
+                DrawFileTab(0.1f * file_browser_dimensions.y);
+                DrawFileList(0.72f * file_browser_dimensions.y);
 
-                const float open_file_dialog_height = 0.5f * ImGui::GetIO().DisplaySize.y;
-                const float file_tab_height = 0.1f * open_file_dialog_height;
-
-                // Draw File Tab
-                ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, 2.f);
-                ImGui::BeginChild("FileTab", ImVec2(0, file_tab_height), true,
-                    ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-
-                // Up button
-                if (ImGui::ArrowButton("UpButton", ImGuiDir_Up))
-                {
-                    // You cannot go up a directory if you're already in the root directory of a logical
-                    // drive. From there just empty out the current directory and start building it again once
-                    // the user selects the logical drive.
-                    bool cannot_go_up = absolute_filepath.empty() || absolute_filepath.length() == 3;
-                    if (cannot_go_up)
-                    {
-                        current_dir = "";
-                    }
-                    else
-                    {
-                        current_dir += "/..";
-                        absolute_filepath = std::filesystem::absolute(current_dir).string();
-                    }
-                }
-
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 1.0f, 1.0f, 0.f));
-                ImGui::SameLine();
-                if (ImGui::Button("Computer"))
-                {
-                    current_dir = "";
-                }
-
-                if (!absolute_filepath.empty())
-                {
-                    std::vector<std::string> directories = ParsePath(absolute_filepath);
-                    for (size_t i = 0; i < directories.size(); ++i)
-                    {
-                        DrawFakeArrowButton();
-
-                        ImGui::SameLine(0.f, 0.f);
-                        if (ImGui::Button(directories[i].c_str()))
-                        {
-                            current_dir = "";
-                            for (size_t k = 0; k <= i; ++k)
-                            {
-                                current_dir += directories[k];
-                                current_dir += "\\";
-                            }
-                        }
-                    }
-                }
-                ImGui::PopStyleColor();
-                ImGui::PopStyleVar();
-
-                ImGui::EndChild();
-
-                // Draw File List
-                const float file_list_height = 0.72f * open_file_dialog_height;
-                ImGui::BeginChild("FileList", ImVec2(0, file_list_height), true);
-                ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 8));
-
-                if (current_dir.empty())
-                {
-                    // Todo: Visually separate Removable drives
-                    char buffer[64];
-                    DWORD length = GetLogicalDriveStringsA(64, buffer);
-
-                    ImGui::Unindent(ImGui::GetTreeNodeToLabelSpacing());
-
-                    for (unsigned long i = 0; i < length; ++i)
-                    {
-                        bool is_drive_name = buffer[i] != ':' && buffer[i] != '\\' && buffer[i] != '\0';
-                        if (is_drive_name)
-                        {
-                            if (ImGui::TreeNodeEx(&buffer[i], flags))
-                            {
-                                if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && ImGui::IsItemHovered(ImGuiHoveredFlags_None))
-                                {
-                                    current_dir += buffer[i];
-                                    current_dir += ":/";
-                                }
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    ImGui::Unindent(ImGui::GetTreeNodeToLabelSpacing());
-                    for (const auto& entry : std::filesystem::directory_iterator(current_dir))
-                    {
-                        const std::filesystem::path& filepath = entry.path();
-                        std::string extension = filepath.extension().string();
-
-                        bool is_item_hidden = FILE_ATTRIBUTE_HIDDEN & GetFileAttributesW(filepath.wstring().c_str());
-                        bool is_item_displayable = (!is_item_hidden || (is_item_hidden && show_hidden_items))
-                            && (entry.is_directory() || extension == ".raw" || extension == ".pvm");
-                        if (is_item_displayable)
-                        {
-                            const std::string& path = filepath.filename().string();
-
-                            ImVec4 text_color = GetListItemTextColor(entry.is_directory(), is_item_hidden);
-                            ImGui::PushStyleColor(ImGuiCol_Text, text_color);
-
-                            if (ImGui::TreeNodeEx(path.c_str(), flags))
-                            {
-                                if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && ImGui::IsItemHovered(ImGuiHoveredFlags_None))
-                                {
-                                    if (entry.is_directory())
-                                    {
-                                        current_dir.append("/" + path);
-                                    }
-                                    else
-                                    {
-                                        show_file_details_dialog = true;
-                                        volume_path = std::filesystem::absolute(filepath).string();
-                                    }
-                                }
-                            }
-                            ImGui::PopStyleColor();
-                        }
-                    }
-                }
-
-                ImGui::PopStyleVar();
-                ImGui::EndChild();
-
-                const float open_file_dialog_width = 0.5f * ImGui::GetIO().DisplaySize.x;
-                const float button_group_height = 0.1f * open_file_dialog_height;
-                ImGui::BeginChild("ButtonGroup", ImVec2(0, button_group_height));
-                ImGui::SetCursorPosY(button_group_height * 0.2f);
+                // Draw Bottom Bar
+                const float bottom_bar_height = 0.1f * file_browser_dimensions.y;
+                ImGui::BeginChild("BottomBar", ImVec2(0, bottom_bar_height));
+                ImGui::SetCursorPosY(bottom_bar_height * 0.2f);
 
                 ImGui::Checkbox("Show Hidden Files", &show_hidden_items);
 
-                ImVec2 button_size = { button_group_height * 2.f, button_group_height * 0.75f };
+                ImVec2 button_size = { bottom_bar_height * 2.f, bottom_bar_height * 0.75f };
                 ImGui::SameLine();
-                ImGui::SetCursorPosX(open_file_dialog_width - 2.25f * button_size.x);
+                ImGui::SetCursorPosX(file_browser_dimensions.x - 2.25f * button_size.x);
 
                 // Cancel Button
                 ImGui::SameLine(550.f);
@@ -672,6 +691,49 @@ int WINAPI WinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev_instance, _I
             }
         }
 
+        if (show_save_file_dialog)
+        {
+            ImVec2 file_browser_dimensions = PlaceFileBrowserWindow();
+
+            ImGui::OpenPopup("SaveFileDialog");
+            if (ImGui::BeginPopupModal("SaveFileDialog", 0, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove))
+            {
+                DrawFileTab(0.1f * file_browser_dimensions.y);
+                DrawFileList(0.72f * file_browser_dimensions.y);
+
+                // Draw Bottom Bar
+                const float bottom_bar_height = 0.1f * file_browser_dimensions.y;
+                ImGui::BeginChild("BottomBar", ImVec2(0, bottom_bar_height));
+                ImGui::SetCursorPosY(bottom_bar_height * 0.2f);
+
+                // Text field
+                static char buf1[64] = "Untitled.png";
+                ImGui::InputText("", buf1, 64);
+
+                ImVec2 button_size = { bottom_bar_height * 2.f, bottom_bar_height * 0.75f };
+
+                ImGui::SameLine(462.f);
+                
+                if (ImGui::Button("Save", button_size))
+                {
+                    const std::string& absolute_filepath = std::filesystem::absolute(current_dir).string();
+                    path_to_save_at = absolute_filepath + "\\" + buf1;
+                    save_as_png = true;
+                }
+
+                // Cancel Button
+                ImGui::SameLine(550.f);
+                if (ImGui::Button("Cancel", button_size))
+                {
+                    show_save_file_dialog = false;
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::EndChild();
+
+                ImGui::EndPopup();
+            }
+        }
+
         ImGui::Render();
 
         // Load and upload the volume data if it has changed
@@ -685,7 +747,6 @@ int WINAPI WinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev_instance, _I
             new_volume = false;
         }
 
-#if 1
         // Generate Entry and Exit point textures
         glBindFramebuffer(GL_FRAMEBUFFER, entry_exit_points_fbo);
         glEnable(GL_DEPTH_TEST);
@@ -741,16 +802,9 @@ int WINAPI WinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev_instance, _I
         glBindTexture(GL_TEXTURE_1D, transfer_function_texture);
         
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-#endif
+
         if (save_as_png)
         {
-            unsigned char* pixels = (unsigned char*)malloc(1280 * 720 * 3);
-            glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, pixels);
-
-            stbi_flip_vertically_on_write(1);
-            stbi_write_png("image.png", width, height, 3, pixels, width * 3);
-            free(pixels);
-
 #ifdef _DEBUG
             // Check the default framebuffer data type because it will affect PNG writing
             GLint value = 0;
@@ -762,11 +816,26 @@ int WINAPI WinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev_instance, _I
             assert(value == GL_UNSIGNED_BYTE);
 
 #endif
+            unsigned char* pixels = (unsigned char*)malloc(1280 * 720 * 3);
+            glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+
+            // Todo: If path_to_save_at doesn't end with a .png, append!
+            assert(path_to_save_at.length() != 0);
+
+            if (path_to_save_at.length() <= 3 || path_to_save_at.substr(path_to_save_at.length() - 4, 4) != ".png")
+            {
+                path_to_save_at += ".png";
+            }
+
+            stbi_flip_vertically_on_write(1);
+            stbi_write_png(path_to_save_at.c_str(), width, height, 3, pixels, width * 3);
+            free(pixels);
+
             save_as_png = false;
+            show_save_file_dialog = false;
         }
 
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
 
         window.SwapBuffers();
     }
