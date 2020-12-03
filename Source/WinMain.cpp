@@ -57,6 +57,7 @@ std::string volume_path = "../Resources/skull_256x256x256_uint8.raw";
 
 float sampling_rate = 2.f;
 
+#if 0
 template <typename T>
 void Lerp(unsigned int x0, unsigned int x1, T* values)
 {
@@ -68,7 +69,7 @@ void Lerp(unsigned int x0, unsigned int x1, T* values)
     for (unsigned int i = x0 + 1; i <= x1 - 1; ++i)
         values[i] = m * (float)(i - x0) + y0;
 }
-
+#endif
 
 #ifdef _DEBUG
 void WINAPI GLDebugOutput(GLenum source, GLenum type, unsigned int id, GLenum severity, GLsizei length,
@@ -387,6 +388,28 @@ void DrawFileList(float height)
     ImGui::EndChild();
 }
 
+GLuint GetTFTexture(TransferFunctionWidget& tf_widget)
+{
+    const std::vector<float>& colormap = tf_widget.get_colormapf();
+    const size_t texel_count = colormap.size() / 4;
+
+    // Make it into a 1D texture
+    GLuint texture;
+    glGenTextures(1, &texture);
+
+    glBindTexture(GL_TEXTURE_1D, texture);
+    glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    // Upload it to the GPU
+    glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, texel_count, 0, GL_RGBA, GL_FLOAT, colormap.data());
+
+    glBindTexture(GL_TEXTURE_1D, 0);
+
+    return texture;
+}
+
 int WINAPI WinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev_instance, _In_ LPSTR cmd_line, _In_ int show_code)
 {
     int width = 1280;
@@ -439,11 +462,13 @@ int WINAPI WinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev_instance, _I
     // Note: You should call glViewport here, GLFW's FramebufferSizeCallback doesn't get called without resizing the window first
     glViewport(0, 0, width, height);
 
+#if 0
     // Create a transfer function
-    // TODO: This texel count makes too much total size on the stack, allocate this on heap
     const size_t transfer_function_texel_count = 180;
     glm::vec4 transfer_function[transfer_function_texel_count];
 
+    // There are 11 elements here because Inviwo's default TF had 11 points on it with these exact same
+    // positions, you don't have to do any of this with Will Usher's code
     // A scalar between 0 and 1
     double position[11] =
     {
@@ -480,22 +505,11 @@ int WINAPI WinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev_instance, _I
 
     for (unsigned int i = tf_idx[10] + 1; i < transfer_function_texel_count; ++i)
         transfer_function[i] = transfer_function[tf_idx[10]];
+#endif
 
-    // Make it into a 1D texture
-    GLuint transfer_function_texture;
-    glGenTextures(1, &transfer_function_texture);
-
-    glActiveTexture(GL_TEXTURE0 + 1);
-    glBindTexture(GL_TEXTURE_1D, transfer_function_texture);
-    glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-    // Upload it to the GPU
-    glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, transfer_function_texel_count, 0, GL_RGBA, GL_FLOAT, &transfer_function[0]);
-
-    glBindTexture(GL_TEXTURE_1D, 0);
-
+    TransferFunctionWidget tf_widget;
+    GLuint transfer_function_texture = GetTFTexture(tf_widget);
+    
     Mesh cube(GetUnitCubeVertices(), 3, GetUnitCubeIndices());
     Mesh quad(GetNDCQuadVertices(), 2, GetNDCQuadIndices());
 
@@ -548,8 +562,6 @@ int WINAPI WinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev_instance, _I
 
     bool save_as_png = false;
     std::string path_to_save_at = "";
-
-    TransferFunctionWidget tf_widget;
 
     while (!window.ShouldClose())
     {
@@ -752,13 +764,11 @@ int WINAPI WinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev_instance, _I
         {
             tf_widget.draw_ui();
 
-            // Create the TF here with all them colors
-            const std::vector<float>& colors = tf_widget.get_colormapf();
+            // Todo: You could use, glTexSubImage class of functions to replace the data in memory instead of
+            // deleting and reallocating it everytime.
+            glDeleteTextures(1, &transfer_function_texture);
 
-            // You get interpolated alpha and color values with 180 texels, just make a texture out of them
-            // and upload them to the motherfucking GPU
-
-            // Make a texture out of those and upload it to the GPU
+            transfer_function_texture = GetTFTexture(tf_widget);
         }
 
         ImGui::Render();
