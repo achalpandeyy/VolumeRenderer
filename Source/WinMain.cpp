@@ -21,6 +21,7 @@
 #include <iostream>
 #include <vector>
 #include <filesystem>
+#include <TFWidget/transfer_function_widget.h>
 
 /*
 * Todo:
@@ -440,7 +441,7 @@ int WINAPI WinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev_instance, _I
 
     // Create a transfer function
     // TODO: This texel count makes too much total size on the stack, allocate this on heap
-    const size_t transfer_function_texel_count = 1024;
+    const size_t transfer_function_texel_count = 180;
     glm::vec4 transfer_function[transfer_function_texel_count];
 
     // A scalar between 0 and 1
@@ -452,7 +453,7 @@ int WINAPI WinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev_instance, _I
         0.62602716684341431, 0.73614190687361414
     };
 
-    // TODO: The above list of doubles need not be sorted, sort them and assert sorted
+    // Todo: The above list of doubles need not be sorted, sort them and assert sorted
 
     // Map the position to the index in transfer_function
     size_t tf_idx[11];
@@ -497,7 +498,6 @@ int WINAPI WinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev_instance, _I
 
     Mesh cube(GetUnitCubeVertices(), 3, GetUnitCubeIndices());
     Mesh quad(GetNDCQuadVertices(), 2, GetNDCQuadIndices());
-
 
     Shader shader("../Source/Shaders/Shader.vs", "../Source/Shaders/Shader.fs");
 
@@ -544,8 +544,12 @@ int WINAPI WinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev_instance, _I
     bool show_open_file_dialog = false;
     bool show_save_file_dialog = false;
 
+    bool show_tf_window = false;
+
     bool save_as_png = false;
     std::string path_to_save_at = "";
+
+    TransferFunctionWidget tf_widget;
 
     while (!window.ShouldClose())
     {
@@ -579,7 +583,17 @@ int WINAPI WinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev_instance, _I
 
             if (ImGui::BeginMenu("Settings"))
             {
-                show_settings_window = true;
+
+                if (ImGui::MenuItem("Edit Rendering Settings"))
+                {
+                    show_settings_window = true;
+                }
+
+                if (ImGui::MenuItem("Edit Transfer Function"))
+                {
+                    show_tf_window = true;
+                }
+
                 ImGui::EndMenu();
             }
 
@@ -732,6 +746,19 @@ int WINAPI WinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev_instance, _I
 
                 ImGui::EndPopup();
             }
+        }
+
+        if (show_tf_window)
+        {
+            tf_widget.draw_ui();
+
+            // Create the TF here with all them colors
+            const std::vector<float>& colors = tf_widget.get_colormapf();
+
+            // You get interpolated alpha and color values with 180 texels, just make a texture out of them
+            // and upload them to the motherfucking GPU
+
+            // Make a texture out of those and upload it to the GPU
         }
 
         ImGui::Render();
